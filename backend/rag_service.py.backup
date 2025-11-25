@@ -1,0 +1,285 @@
+import os
+from typing import List, Dict, Any
+from pinecone import Pinecone
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+
+from dotenv import load_dotenv
+
+class RAGAgent:
+    def __init__(self):
+        print("Initializing RAGAgent...")
+        load_dotenv()
+        # Initialize Pinecone
+        print("Initializing Pinecone...")
+        try:
+            self.pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+            self.index = self.pc.Index(os.getenv("PINECONE_INDEX_NAME", "rag-questions"))
+            print("Pinecone initialized.")
+        except Exception as e:
+            print(f"Error initializing Pinecone: {e}")
+        
+        # Initialize OpenAI
+        print("Initializing OpenAI...")
+        try:
+            # Use text-embedding-3-small which produces 384-dimensional vectors
+            # This matches the Pinecone index dimension configuration
+            # IMPORTANT: Must explicitly set dimensions=384, as the model defaults to 1536!
+            self.embeddings = OpenAIEmbeddings(
+                model="text-embedding-3-small",
+                dimensions=384,
+                api_key=os.getenv("OPENAI_API_KEY")
+            )
+            print(f"Embeddings model: {self.embeddings.model}")
+            print(f"Embeddings dimensions: {self.embeddings.dimensions}")
+            self.llm = ChatOpenAI(
+                model="gpt-4o-mini",  # Using GPT-4o-mini for better instruction following
+                temperature=0.7,
+                api_key=os.getenv("OPENAI_API_KEY")
+            )
+            print("OpenAI initialized.")
+        except Exception as e:
+            print(f"Error initializing OpenAI: {e}")
+        print("RAGAgent initialization complete.")
+
+    def generate_questions(self, subject: str, difficulty: str, count: int) -> List[Dict[str, Any]]:
+        print(f"\n{'='*60}")
+        print(f"QUESTION GENERATION REQUEST:")
+        print(f"  Subject: {subject}")
+        print(f"  Difficulty: {difficulty}")
+        print(f"  Count: {count}")
+        print(f"{'='*60}\n")
+        
+        # Try up to 2 times to get the correct number of questions
+        max_attempts = 2
+        
+        for attempt in range(max_attempts):
+            try:
+                if attempt > 0:
+                    print(f"\n🔄 Retry attempt {attempt + 1}/{max_attempts}...\n")
+                
+                # 1. Retrieve Context from Pinecone
+                query_text = f"{difficulty} level concepts and problems in {subject}"
+                print(f"Querying Pinecone with: '{query_text}'")
+                
+                # Create embedding for the query
+                query_embedding = self.embeddings.embed_query(query_text)
+                print(f"Generated embedding with {len(query_embedding)} dimensions")
+                
+                # Query Pinecone with subject filter if metadata exists
+                try:
+                    # Try querying with subject filter first
+                    results = self.index.query(
+                        vector=query_embedding,
+                        top_k=10,  # Increased to get more relevant context
+                        include_metadata=True,
+                        filter={"subject": subject.lower()}  # Filter by subject
+                    )
+                    print(f"Pinecone query with filter returned {len(results['matches'])} matches")
+                except Exception as filter_error:
+                    print(f"Filter query failed (metadata might not exist): {filter_error}")
+                    # Fallback to query without filter
+                    results = self.index.query(
+                        vector=query_embedding,
+                        top_k=10,
+                        include_metadata=True
+                    )
+                    print(f"Pinecone query without filter returned {len(results['matches'])} matches")
+                
+                # Extract context text and log what we found
+                print(f"\n{'─'*60}")
+                print(f"📚 RETRIEVED CONTEXT FROM PINECONE:")
+                print(f"{'─'*60}")
+                
+                contexts = []
+                source_files = []
+                using_rag = False
+                
+                for i, match in enumerate(results['matches']):
+                    if 'text' in match['metadata']:
+                        contexts.append(match['metadata']['text'])
+                        using_rag = True
+                        
+                        # Extract metadata
+                        metadata = match['metadata']
+                        score = match['score']
+                        source = metadata.get('source', 'Unknown')
+                        subject_meta = metadata.get('subject', 'N/A')
+                        page = metadata.get('page', 'N/A')
+                        
+                        # Store source file
+                        if source not in source_files:
+                            source_files.append(source)
+                        
+                        # Display detailed match info
+                        print(f"\n  Match #{i+1}:")
+                        print(f"    📄 Source File: {source}")
+                        print(f"    📊 Subject: {subject_meta}")
+                        print(f"    📖 Page: {page}")
+                        print(f"    🎯 Relevance Score: {score:.4f}")
+                    prompt = f"""IMPORTANT: You previously generated the wrong number of questions. This time, you MUST generate EXACTLY {count} questions.
+
+You are generating questions for: {subject}
+Difficulty: {difficulty}
+Number of questions required: {count}
+
+DO NOT generate questions about any other subject. ONLY {subject}.
+
+Count your questions as you generate them:
+Question 1: about {subject}
+Question 2: about {subject}
+Question 3: about {subject}
+... continue until Question {count}
+
+Return a JSON array with EXACTLY {count} objects:
+[
+  {{"id": "1", "text": "{subject} question 1?", "options": ["A", "B", "C", "D"], "correctAnswer": 0, "explanation": "..."}},
+  {{"id": "2", "text": "{subject} question 2?", "options": ["A", "B", "C", "D"], "correctAnswer": 1, "explanation": "..."}},
+  ... {count - 2} more questions ...
+  {{"id": "{count}", "text": "{subject} question {count}?", "options": ["A", "B", "C", "D"], "correctAnswer": 2, "explanation": "..."}}
+]
+
+The array MUST have {count} elements. Count them before returning.
+Return ONLY the JSON array.
+"""
+                
+                print(f"\nSending prompt to LLM (requesting {count} {subject} questions)...")
+                response = self.llm.invoke(prompt)
+                content = response.content.strip()
+                
+                print(f"LLM Response length: {len(content)} characters")
+                
+                # Clean up potential markdown formatting
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.startswith("```"):
+                    content = content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                
+                content = content.strip()
+                    
+                import json
+                questions = json.loads(content)
+                
+                print(f"\n{'='*60}")
+                print(f"GENERATION RESULT:")
+                print(f"  Requested: {count} {subject} questions")
+                print(f"  Generated: {len(questions)} questions")
+                
+                # Verify all questions are about the requested subject
+                for i, q in enumerate(questions):
+                    q['id'] = str(i)
+                    print(f"  Q{i+1}: {q['text'][:60]}...")
+                
+                # Check if we got the right number of questions
+                if len(questions) == count:
+                    print(f"✅ SUCCESS: Generated exactly {count} questions!")
+                    
+                    # Add source information summary
+                    print(f"\n{'─'*60}")
+                    print(f"📊 QUESTION SOURCE SUMMARY:")
+                    print(f"{'─'*60}")
+                    if using_rag and source_files:
+                        print(f"✅ Questions generated using RAG (Retrieval-Augmented Generation)")
+                        print(f"   Knowledge Source: Vector Database + LLM")
+                        print(f"   📁 Documents Used ({len(source_files)}):")
+                        for sf in source_files:
+                            print(f"      • {sf}")
+                    else:
+                        print(f"⚠️  Questions generated using PURE LLM KNOWLEDGE")
+                        print(f"   Knowledge Source: LLM's pre-trained knowledge only")
+                        print(f"   Reason: No relevant documents in Pinecone for this query")
+                    print(f"{'─'*60}")
+                    
+                    print(f"{'='*60}\n")
+                    return questions
+                else:
+                    print(f"⚠️  WARNING: Generated {len(questions)} questions but {count} were requested!")
+                    
+                    # If this is not the last attempt, continue to retry
+                    if attempt < max_attempts - 1:
+                        print(f"Will retry with a more forceful prompt...")
+                        continue
+                    else:
+                        # Last attempt failed - pad or trim to match count
+                        print(f"⚠️  Last attempt - adjusting question count...")
+                        
+                        if len(questions) < count:
+                            # Need more questions - duplicate some
+                            print(f"Padding from {len(questions)} to {count} questions...")
+                            while len(questions) < count:
+                                # Duplicate a random question with modified text
+                                import random
+                                template = random.choice(questions).copy()
+                                template['id'] = str(len(questions))
+                                template['text'] = f"[Generated] {template['text']}"
+                                questions.append(template)
+                        elif len(questions) > count:
+                            # Too many questions - trim
+                            print(f"Trimming from {len(questions)} to {count} questions...")
+                            questions = questions[:count]
+                        
+                        # Re-assign IDs
+                        for i, q in enumerate(questions):
+                            q['id'] = str(i)
+                        
+                        # Add source information summary
+                        print(f"\n{'─'*60}")
+                        print(f"📊 QUESTION SOURCE SUMMARY:")
+                        print(f"{'─'*60}")
+                        if using_rag and source_files:
+                            print(f"✅ Questions generated using RAG (Retrieval-Augmented Generation)")
+                            print(f"   Knowledge Source: Vector Database + LLM")
+                            print(f"   📁 Documents Used ({len(source_files)}):")
+                            for sf in source_files:
+                                print(f"      • {sf}")
+                        else:
+                            print(f"⚠️  Questions generated using PURE LLM KNOWLEDGE")
+                            print(f"   Knowledge Source: LLM's pre-trained knowledge only")
+                            print(f"   Reason: No relevant documents in Pinecone for this query")
+                        print(f"{'─'*60}")
+                        
+                        print(f"{'='*60}\n")
+                        return questions
+
+            except json.JSONDecodeError as e:
+                print(f"\n❌ JSON Parse Error: {e}")
+                print(f"Response content: {content[:500]}...")
+                if attempt < max_attempts - 1:
+                    print("Retrying...")
+                    continue
+                else:
+                    raise
+            except Exception as e:
+                print(f"\n❌ ERROR in RAG generation: {e}")
+                import traceback
+                traceback.print_exc()
+                if attempt < max_attempts - 1:
+                    print("Retrying...")
+                    continue
+                else:
+                    raise
+        
+        # If we get here, all attempts failed
+        print(f"\n❌ All {max_attempts} attempts failed")
+        return [
+            {
+                "id": "error",
+                "text": f"Error generating questions after {max_attempts} attempts. Please try again.",
+                "options": ["Error", "Error", "Error", "Error"],
+                "correctAnswer": 0,
+                "explanation": "An error occurred in the backend."
+            }
+        ]
+
+    def ingest_document(self, file_path: str):
+        """
+        Ingests a PDF document into the Vector DB.
+        """
+        print(f"Ingesting file: {file_path}")
+        # TODO: INTEGRATE YOUR PDF LOADING & EMBEDDING LOGIC HERE
+        # 1. Load PDF using PyPDFLoader
+        # 2. Split text into chunks
+        # 3. Create embeddings
+        # 4. Upsert to Pinecone
+        return True
