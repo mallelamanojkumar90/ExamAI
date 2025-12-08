@@ -1,0 +1,540 @@
+
+# Product Requirements Document (PRD)
+# Exam Preparation & Learning Management Platform
+
+## Document Information
+Version: 1.0
+Last Updated: December 2025
+Status: Draft for Review
+
+---
+
+## 1. Product Overview
+
+### 1.1 Idea
+Development of a comprehensive exam preparation and learning management platform that serves both students and administrators in educational institutions.
+
+### 1.2 Document Purpose
+This PRD outlines the requirements, features, technical architecture, and implementation phases for an exam preparation platform designed to streamline the educational workflow from content management to student assessment and subscription management.
+
+---
+
+## 2. Objectives
+
+### Primary Goals:
+• Enable students to efficiently search, access, and prepare for various competitive exams (IIT/JEE, NEET, EAMCET, etc.)
+• Provide administrators with tools to manage syllabi, exam patterns, study materials, and student performance
+• Create a scalable platform that supports multiple subscription models
+• Facilitate seamless exam preparation through structured learning paths and practice resources
+
+### Success Metrics:
+• User engagement (daily active users, time spent on platform)
+• Exam completion rates
+• Student performance improvement
+• Subscription conversion rates
+• Platform uptime and response times
+
+---
+
+## 3. Tech Stack
+
+### 3.1 Frontend
+• Framework: React.js or Next.js
+• UI Library: Material-UI, Tailwind CSS, or Ant Design
+• State Management: Redux or Context API
+
+### 3.2 Backend
+• Framework: Node.js (Express) or Python (Django/Flask) or Java (Spring Boot)
+• API Architecture: RESTful or GraphQL
+• Authentication: JWT, OAuth 2.0
+
+### 3.3 Database
+• Primary Options: PostgreSQL, MySQL, SQL Server, MongoDB, or Supabase
+• Caching: Redis (for session management and performance)
+
+### 3.4 Libraries & Tools
+• PDF Generation: jsPDF, PDFKit, or Puppeteer
+• Real-time Communication: Socket.io (for live features)
+• Email Service: SendGrid, Mailgun, or AWS SES
+• Payment Gateway: Stripe, Razorpay, or PayPal
+
+### 3.5 Cloud & Infrastructure
+• Hosting: AWS, Google Cloud Platform, Azure, or on-premise
+• Containerization: Docker
+• Orchestration: Kubernetes
+• CI/CD: Jenkins, GitHub Actions, or GitLab CI
+• Deployment: Vercel/GCP/AWS with CLI scripting (PowerShell/Yaml)
+
+---
+
+## 4. Pros and Cons Analysis
+
+### 4.1 Pros
+• Centralized platform for exam preparation
+• Scalable architecture supporting growing user base
+• Multiple revenue streams through subscription models
+• Comprehensive admin controls for content management
+• Data-driven insights into student performance
+• Automated reporting and analytics
+• Flexible subscription options catering to different user needs
+
+### 4.2 Cons
+• High initial development and infrastructure costs
+• Requires ongoing content updates and maintenance
+• Potential scalability challenges during peak exam seasons
+• Need for robust security measures to protect student data
+• Competition from established ed-tech platforms
+• Dependency on quality of educational content
+• Requires significant marketing to acquire users
+
+---
+
+## 5. MVP Design (Minimum Viable Product - POC)
+
+### Phase 1: Core Features
+
+Student Side:
+• User registration and authentication (Gmail/email)
+• Basic search functionality for exams
+• Attempt one sample exam
+• View basic performance report
+
+Admin Side:
+• Add one syllabus
+• Create one exam pattern
+• Upload basic study material
+• View student registration list
+
+Technical:
+• Basic database schema
+• Simple responsive UI
+• Core API endpoints
+• Basic authentication
+
+### Success Criteria for MVP
+• 50+ active users
+• 80%+ successful exam completion rate
+• System uptime of 95%+
+• Positive user feedback (4/5 rating)
+
+---
+
+## 6. Wireframes & User Flow
+
+### 6.1 User Journey - Student
+Landing Page → Registration/Login → Dashboard → Multiple paths:
+├── Search Exams → Select Exam → View Details → Attempt Exam → Results
+├── Download Reports → PDF Generation → Download
+├── Talk to Voice Assistant → AI Interaction → Guidance
+├── Prepare for Interview → Access Resources → Practice
+├── Prepare for Exam → Study Materials → Practice Tests
+└── Manage Subscription → Select Plan → Payment → Confirmation
+
+### 6.2 User Journey - Admin
+Admin Login → Admin Dashboard → Multiple paths:
+├── Add Syllabus → Select Exam Type → Input Details → Save
+├── Add Exam Pattern → Define Structure → Add Questions → Publish
+├── Add Materials → Upload Files → Categorize → Publish
+├── View Reports → Student Performance → Analytics → Export
+└── Subscription Management → Payment Gateway → Deductions → Credits
+
+---
+
+## 7. Detailed Features
+
+### 7.1 End User (Student) Features
+
+F1: Search Functionality
+• Search by exam type (IIT/JEE, NEET, EAMCET, etc.)
+• Filter by difficulty level, subject, topic
+• Search history and saved searches
+• Auto-suggestions and recommendations
+
+F2: Attempt Exam
+• Timed exam interface
+• Question navigation (answered/unanswered/marked for review)
+• Save and resume functionality
+• Submit and review answers
+• Real-time score calculation
+
+F3: Download Report
+• Comprehensive performance report (PDF)
+• Subject-wise breakdown
+• Comparison with average scores
+• Strengths and weaknesses analysis
+• Historical performance tracking
+
+F4: Talk to Voice Assistant
+• AI-powered voice interaction
+• Query resolution (syllabus, exam pattern, preparation tips)
+• Voice-to-text conversion
+• Conversational guidance
+
+F5: Prepare for Interview
+• Common interview questions database
+• Video/audio response practice
+• Mock interview scheduling
+• Interview tips and strategies
+• Industry-specific preparation
+
+F6: Prepare for Exam
+• Subject-wise study materials
+• Topic-wise practice questions
+• Flashcards and quick revision notes
+• Video lectures and tutorials
+• Progress tracking
+
+F7: Registration (Gmail)
+• OAuth integration with Google
+• Email/password registration option
+• Profile completion wizard
+• Email verification
+• Password recovery
+
+F8: Performance Tracking
+• Personal dashboard with metrics
+• Progress graphs and charts
+• Comparison with peers (anonymized)
+• Improvement suggestions
+• Goal setting and tracking
+
+F9: Subscription Mode
+• Monthly: Full access for 30 days
+• Quarterly: Full access for 90 days with 10% discount
+• Annual: Full access for 365 days with 20% discount
+• Auto-renewal options
+• Subscription management interface
+
+### 7.2 Admin User Features
+
+F1: Add Syllabus
+• Support for multiple exam types (IIT/JEE, NEET, EAMCET)
+• Subject and topic hierarchy
+• Syllabus versioning
+• Bulk upload via CSV/Excel
+• Syllabus approval workflow
+
+F2: Add Exam Pattern
+• Define exam structure (sections, questions, marks)
+• Set time limits per section
+• Question type configuration (MCQ, numerical, descriptive)
+• Negative marking rules
+• Difficulty level assignment
+
+F3: Add Material to Knowledge Base
+• Upload documents (PDF, PPT, Word)
+• Video content integration
+• Categorization and tagging
+• Content versioning
+• Content approval workflow
+• Search optimization
+
+F4: Student Reports
+• Individual student performance
+• Batch/group analytics
+• Exam-wise statistics
+• Attendance and engagement metrics
+• Export functionality (CSV, PDF, Excel)
+• Custom report generation
+
+F5: Subscription Management
+• Payment gateway integration
+• Subscription plan configuration
+• Monthly deductions automation
+• Credit management system
+• Refund processing
+• Invoice generation
+• Payment reminders and notifications
+
+---
+
+## 8. Feature Breakdown by Phase
+
+### Phase 1 (Months 1-3): MVP Launch
+
+Student Features:
+• Registration/Login
+• Search basic exams
+• Attempt exam
+• Basic performance tracking
+
+Admin Features:
+• Add syllabus
+• Create exam pattern
+• Upload materials
+• View student list
+
+### Phase 2 (Months 4-6): Enhanced Functionality
+
+Student Features:
+• Download detailed reports (PDF)
+• Subscription model implementation
+• Enhanced performance dashboard
+
+Admin Features:
+• Comprehensive student reports
+• Payment gateway integration
+• Subscription management
+
+### Phase 3 (Months 7-9): Advanced Features
+
+Student Features:
+• Voice assistant integration
+• Prepare for interview module
+• Advanced exam preparation tools
+
+Admin Features:
+• Analytics dashboard
+• Bulk operations
+• Advanced reporting
+
+---
+
+## 9. Database Design (ORM)
+
+### 9.1 Core Entities
+
+Users Table
+• user_id (PK)
+• email (unique)
+• password_hash
+• full_name
+• role (student/admin)
+• phone_number
+• created_at
+• updated_at
+• last_login
+• is_active
+
+Exams Table
+• exam_id (PK)
+• exam_name
+• exam_type (IIT/JEE, NEET, etc.)
+• duration (minutes)
+• total_marks
+• passing_marks
+• created_by (FK to Users)
+• created_at
+• is_active
+
+Syllabus Table
+• syllabus_id (PK)
+• exam_id (FK)
+• subject_name
+• topics (JSON or separate table)
+• description
+• created_at
+• updated_at
+
+Questions Table
+• question_id (PK)
+• exam_id (FK)
+• subject
+• topic
+• question_text
+• question_type (MCQ, numerical, etc.)
+• difficulty_level
+• options (JSON)
+• correct_answer
+• marks
+• negative_marks
+• explanation
+
+Exam_Attempts Table
+• attempt_id (PK)
+• user_id (FK)
+• exam_id (FK)
+• start_time
+• end_time
+• score
+• total_questions
+• correct_answers
+• incorrect_answers
+• unanswered
+• status (completed/in_progress)
+
+Answers Table
+• answer_id (PK)
+• attempt_id (FK)
+• question_id (FK)
+• user_answer
+• is_correct
+• time_taken
+• marked_for_review
+
+Study_Materials Table
+• material_id (PK)
+• title
+• description
+• file_url
+• material_type (PDF, video, etc.)
+• subject
+• topic
+• exam_id (FK)
+• uploaded_by (FK to Users)
+• created_at
+
+Subscriptions Table
+• subscription_id (PK)
+• user_id (FK)
+• plan_type (monthly/quarterly/annual)
+• start_date
+• end_date
+• amount
+• payment_status
+• auto_renew
+• created_at
+
+Payments Table
+• payment_id (PK)
+• subscription_id (FK)
+• user_id (FK)
+• amount
+• payment_method
+• transaction_id
+• status
+• payment_date
+
+Reports Table
+• report_id (PK)
+• user_id (FK)
+• exam_id (FK)
+• attempt_id (FK)
+• report_url (PDF)
+• generated_at
+
+---
+
+## 10. Test-Driven Development (TDD)
+
+### 10.1 UI Design Testing
+• Component unit tests (Jest, React Testing Library)
+• Responsive design testing across devices
+• Cross-browser compatibility
+• Accessibility testing (WCAG compliance)
+• User interface acceptance testing
+
+### 10.2 Backend Testing
+• Unit tests for all API endpoints
+• Integration tests for database operations
+• Authentication and authorization testing
+• Payment gateway integration testing
+• Load testing and stress testing
+
+### 10.3 API Implementation Testing
+• RESTful API endpoint validation
+• Request/response validation
+• Error handling and edge cases
+• API documentation (Swagger/OpenAPI)
+• Performance benchmarking
+
+---
+
+## 11. Testing & Validation
+
+### 11.1 Regression Testing Suite
+• Automated test suite for core functionality
+• Continuous integration testing
+• Pre-deployment validation
+• Post-deployment smoke tests
+• Performance regression testing
+
+### 11.2 Test Coverage Goals
+• Unit test coverage: >80%
+• Integration test coverage: >70%
+• End-to-end test coverage: >60%
+
+---
+
+## 12. Containerization
+
+### 12.1 Docker Configuration
+• Frontend Container: Node.js environment, build artifacts
+• Backend Container: Application server, dependencies
+• Database Container: PostgreSQL/MySQL instance
+• Redis Container: Caching layer
+
+### 12.2 Kubernetes Deployment
+• Pod configuration for scalability
+• Service configuration for load balancing
+• Persistent volume claims for database
+• ConfigMaps and Secrets management
+• Horizontal Pod Autoscaling (HPA)
+
+### 12.3 CI/CD Pipeline
+• Image building and versioning
+• Container registry (Docker Hub, AWS ECR)
+• Automated deployment on code push
+• Rollback mechanisms
+
+---
+
+## 13. Deployment Strategy
+
+### 13.1 Free Credits & Deployment Options
+• Vercel: Frontend deployment (free tier available)
+• GCP: $300 free credits for new users
+• AWS: 12-month free tier for EC2, RDS, S3
+• Azure: $200 free credits for 30 days
+
+### 13.2 Server Requirements
+• Development: 2 vCPU, 4GB RAM
+• Production: 4+ vCPU, 8GB+ RAM, auto-scaling enabled
+• Database: Separate instance with backup configuration
+• CDN: CloudFront or Cloudflare for static assets
+
+---
+
+## 14. Hosting Server with Domain
+
+### 14.1 Steps for Domain Setup
+1. Purchase Domain: GoDaddy, Namecheap, Google Domains
+2. DNS Configuration: Point domain to hosting server IP
+3. SSL Certificate: Let's Encrypt for HTTPS
+4. Server Setup: Configure Nginx/Apache as reverse proxy
+5. Environment Variables: Configure production settings
+6. Monitoring: Set up logging and monitoring (CloudWatch, Stackdriver)
+
+---
+
+## 15. Security Considerations
+
+• Encrypted data transmission (HTTPS)
+• Secure password storage (bcrypt hashing)
+• SQL injection prevention (parameterized queries)
+• XSS and CSRF protection
+• Rate limiting for API endpoints
+• Regular security audits
+• GDPR and data privacy compliance
+• Role-based access control (RBAC)
+
+---
+
+## 16. Monitoring & Maintenance
+
+• Application performance monitoring (APM)
+• Error tracking (Sentry, Rollbar)
+• User analytics (Google Analytics, Mixpanel)
+• Server health monitoring
+• Automated backups (daily database dumps)
+• Regular dependency updates
+• Performance optimization reviews
+
+---
+
+## 17. Future Enhancements
+
+• Mobile applications (iOS/Android)
+• Live classes and webinars
+• Peer-to-peer learning features
+• Gamification (badges, leaderboards)
+• AI-powered personalized learning paths
+• Offline mode support
+• Multi-language support
+• Social learning features (discussion forums)
+
+---
+
+Document Version: 1.0
+Last Updated: December 2025
+Status: Draft for Review

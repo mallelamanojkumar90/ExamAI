@@ -6,6 +6,7 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader, PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import time
+import random
 
 # OCR dependencies
 import fitz  # PyMuPDF for rendering pages
@@ -102,9 +103,9 @@ class RAGAgent:
                     print(f"Generated embedding with {len(query_embedding)} dimensions")
                     
                     # Dynamic top_k based on requested count to ensure sufficient context
-                    # Retrieve 2x the number of questions requested, with a minimum of 20
-                    dynamic_top_k = max(20, count * 2)
-                    print(f"Dynamic top_k set to: {dynamic_top_k} (for {count} questions)")
+                    # Retrieve MORE chunks than needed to allow for random sampling (variety)
+                    dynamic_top_k = max(60, count * 5)
+                    print(f"Dynamic top_k set to: {dynamic_top_k} (for {count} questions) - Increased for variety")
 
                     # Try querying with subject filter first
                     # Allow 'mixed' subject tag as well to capture questions from mixed PDFs
@@ -115,6 +116,32 @@ class RAGAgent:
                         filter={"subject": {"$in": [subject.lower(), "mixed"]}}
                     )
                     print(f"Pinecone query with filter returned {len(results['matches'])} matches")
+                    
+                    # ---------------------------------------------------------
+                    # RANDOMIZATION STRATEGY FOR VARIETY
+                    # ---------------------------------------------------------
+                    all_matches = results['matches']
+                    if all_matches:
+                        # 1. Filter for valid matches
+                        valid_matches = [m for m in all_matches if 'text' in m['metadata']]
+                        
+                        # 2. Randomly sample a subset if we have enough
+                        # We want enough context for the LLM, but different subsets each time
+                        target_context_count = max(20, count * 2)
+                        
+                        if len(valid_matches) > target_context_count:
+                            print(f"  🎲 Randomly sampling {target_context_count} chunks from {len(valid_matches)} available to ensure variety...")
+                            # Use random.sample to pick unique elements
+                            selected_matches = random.sample(valid_matches, target_context_count)
+                        else:
+                            selected_matches = valid_matches
+                            
+                        # 3. Shuffle the selected matches to avoid order bias
+                        random.shuffle(selected_matches)
+                        
+                        # Replace the original matches with our randomized selection
+                        results['matches'] = selected_matches
+                    # ---------------------------------------------------------
                     
                 except Exception as rag_error:
                     print(f"⚠️ RAG RETRIEVAL FAILED: {rag_error}")
@@ -207,18 +234,27 @@ Return a JSON array with EXACTLY {count} objects in this structure:
                 # 2. Build a strict RAG-only prompt
                 if prompt is None and attempt == 0:
                     # First attempt - strict RAG-only prompt
+                    # Add a random seed to the prompt to ensure variety
+                    random_seed = random.randint(1, 10000)
                     prompt = f"""You are an expert exam setter for IIT/JEE exams.
+                    
+Randomization Seed: {random_seed} (Generate a unique set of questions different from previous runs)
 
 CRITICAL INSTRUCTIONS - READ CAREFULLY:
 1. Generate EXACTLY {count} questions - COUNT THEM: 1, 2, 3... up to {count}
-2. ALL questions MUST be about {subject} ONLY
+2. ALL questions MUST be about {subject} ONLY.
+   - ⚠️ WARNING: The context may contain mixed subjects (e.g., Physics questions in a Maths file).
+   - ⚠️ ACTION: You must IGNORE any context that is not strictly {subject}.
+   - If you see a Physics question and you need Maths, SKIP IT.
 3. Difficulty level: {difficulty}
 4. Each question must have exactly 4 options
-5. **MOST IMPORTANT**: Generate questions ONLY from the context provided below
-6. DO NOT use your general knowledge or training data - ONLY use the provided context
-7. Every question must be directly traceable to the context
-8. If the context has limited information, create variations and different angles from what's available
-9. Return ONLY valid JSON - no markdown, no explanations, no extra text
+5. **DATA CLEANING (CRITICAL)**:
+   - Remove ALL source artifacts.
+   - DO NOT include question numbers from the source (e.g., remove "Q.44", "12.", "Q1", "(a)").
+   - The "text" field should contain ONLY the question content, starting with the actual question words.
+6. **MOST IMPORTANT**: Generate questions ONLY from the context provided below
+7. DO NOT use your general knowledge or training data - ONLY use the provided context
+8. Return ONLY valid JSON - no markdown, no explanations, no extra text
 
 DIFFICULTY LEVEL GUIDELINES FOR {difficulty.upper()} QUESTIONS:
 {"- EASY: Focus on recall, definitions, basic concepts, and direct facts from the context" if difficulty.lower() == "easy" else ""}
@@ -240,14 +276,14 @@ Return a JSON array with EXACTLY {count} objects in this structure:
 [
   {{
     "id": "1",
-    "text": "Question based strictly on the context about {subject}?",
-    "options": ["Option A from context", "Option B from context", "Option C from context", "Option D from context"],
+    "text": "Clean question text without Q numbers or artifacts?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
     "correctAnswer": 0,
     "explanation": "Brief explanation referencing the specific part of the context"
   }},
   {{
     "id": "2",
-    "text": "Another question derived from the context about {subject}?",
+    "text": "Another clean {subject} question?",
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "correctAnswer": 1,
     "explanation": "Brief explanation with context reference"
@@ -257,11 +293,9 @@ Return a JSON array with EXACTLY {count} objects in this structure:
 
 CRITICAL REMINDERS:
 - The array must contain EXACTLY {count} question objects
-- Every single question must be derived from the provided context ONLY
-- Every single question must be about {subject} and ONLY {subject}
-- correctAnswer is 0-based index (0=A, 1=B, 2=C, 3=D)
+- FILTER OUT content that is not {subject}
+- REMOVE "Q." or numbers from the start of question text
 - Return ONLY the JSON array, nothing else
-- DO NOT use information outside the provided context
 """
                 elif prompt is None:
                     # Retry with even more forceful RAG-only prompt
@@ -276,8 +310,13 @@ Number of questions required: {count}
 Context from uploaded documents (YOUR ONLY SOURCE):
 {context_str}
 
-DO NOT generate questions about any other subject. ONLY {subject}.
-DO NOT use information outside this context.
+STRICT RULES:
+1. DO NOT generate questions about any other subject. ONLY {subject}.
+   - If the context contains Physics/Chemistry but you need Maths, IGNORE the irrelevant parts.
+2. CLEAN THE DATA:
+   - Remove "Q.", numbers, or artifacts from the start of the question.
+   - Example: Change "Q44. What is..." to "What is..."
+3. DO NOT use information outside this context.
 
 Count your questions as you generate them:
 Question 1: based on context about {subject}
@@ -287,10 +326,10 @@ Question 3: based on context about {subject}
 
 Return a JSON array with EXACTLY {count} objects:
 [
-  {{"id": "1", "text": "{subject} question from context 1?", "options": ["A", "B", "C", "D"], "correctAnswer": 0, "explanation": "..."}},
-  {{"id": "2", "text": "{subject} question from context 2?", "options": ["A", "B", "C", "D"], "correctAnswer": 1, "explanation": "..."}},
+  {{"id": "1", "text": "Clean {subject} question text?", "options": ["A", "B", "C", "D"], "correctAnswer": 0, "explanation": "..."}},
+  {{"id": "2", "text": "Clean {subject} question text?", "options": ["A", "B", "C", "D"], "correctAnswer": 1, "explanation": "..."}},
   ... {count - 2} more questions from the context ...
-  {{"id": "{count}", "text": "{subject} question from context {count}?", "options": ["A", "B", "C", "D"], "correctAnswer": 2, "explanation": "..."}}
+  {{"id": "{count}", "text": "Clean {subject} question text?", "options": ["A", "B", "C", "D"], "correctAnswer": 2, "explanation": "..."}}
 ]
 
 The array MUST have {count} elements. Count them before returning.

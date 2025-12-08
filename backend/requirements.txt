@@ -9,3 +9,8 @@ langchain-openai
 langchain-google-genai
 pypdf
 python-dotenv
+# PostgreSQL and Database
+psycopg2-binary
+sqlalchemy
+bcrypt
+alembic
