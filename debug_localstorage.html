@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug LocalStorage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+        .container {
+            background: #334155;
+            padding: 30px;
+            border-radius: 10px;
+        }
+        h1 { color: #a78bfa; }
+        pre {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        button {
+            background: linear-gradient(to right, #a78bfa, #ec4899);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { opacity: 0.9; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 ExamAI LocalStorage Debugger</h1>
+        
+        <h2>Current User Data:</h2>
+        <pre id="userData"></pre>
+        
+        <h2>Actions:</h2>
+        <button onclick="showData()">Refresh Data</button>
+        <button onclick="clearData()">Clear LocalStorage</button>
+        <button onclick="addTestName()">Add Test Name</button>
+        
+        <h2>Instructions:</h2>
+        <ol>
+            <li>Click "Refresh Data" to see what's currently stored</li>
+            <li>If you see <code>full_name</code> is missing or null, you need to log in again</li>
+            <li>Make sure backend is restarted: <code>cd backend && py main.py</code></li>
+            <li>Log out and log back in to get the updated data</li>
+        </ol>
+        
+        <div id="message"></div>
+    </div>
+
+    <script>
+        function showData() {
+            const user = localStorage.getItem('user');
+            const messageDiv = document.getElementById('message');
+            
+            if (user) {
+                try {
+                    const parsed = JSON.parse(user);
+                    document.getElementById('userData').textContent = JSON.stringify(parsed, null, 2);
+                    
+                    if (parsed.full_name) {
+                        messageDiv.innerHTML = '<p class="success">✅ full_name found: ' + parsed.full_name + '</p>';
+                    } else {
+                        messageDiv.innerHTML = '<p class="error">❌ full_name is missing! You need to log in again.</p>';
+                    }
+                } catch (e) {
+                    document.getElementById('userData').textContent = user;
+                    messageDiv.innerHTML = '<p class="error">❌ Error parsing user data</p>';
+                }
+            } else {
+                document.getElementById('userData').textContent = 'No user data found';
+                messageDiv.innerHTML = '<p class="error">❌ No user logged in</p>';
+            }
+        }
+        
+        function clearData() {
+            localStorage.removeItem('user');
+            showData();
+            document.getElementById('message').innerHTML = '<p class="success">✅ LocalStorage cleared! Please log in again.</p>';
+        }
+        
+        function addTestName() {
+            const user = localStorage.getItem('user');
+            if (user) {
+                try {
+                    const parsed = JSON.parse(user);
+                    parsed.full_name = "Test Student Name";
+                    localStorage.setItem('user', JSON.stringify(parsed));
+                    showData();
+                    document.getElementById('message').innerHTML = '<p class="success">✅ Test name added! Refresh your dashboard.</p>';
+                } catch (e) {
+                    document.getElementById('message').innerHTML = '<p class="error">❌ Error updating data</p>';
+                }
+            } else {
+                document.getElementById('message').innerHTML = '<p class="error">❌ No user data to update</p>';
+            }
+        }
+        
+        // Show data on load
+        showData();
+    </script>
+</body>
+</html>

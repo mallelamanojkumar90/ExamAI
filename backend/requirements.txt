@@ -7,6 +7,8 @@ langchain
 langchain-community
 langchain-openai
 langchain-google-genai
+langchain-anthropic
+langchain-core
 pypdf
 python-dotenv
 # PostgreSQL and Database
@@ -14,3 +16,7 @@ psycopg2-binary
 sqlalchemy
 bcrypt
 alembic
+# Payment Gateway and Subscriptions
+razorpay==1.4.1
+python-dateutil==2.8.2
+reportlab==4.0.7

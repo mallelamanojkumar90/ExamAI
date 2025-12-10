@@ -16,7 +16,7 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///exam_app.db")
 
 # Create engine
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(DATABASE_URL, echo=False)
 
 # Create session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -184,6 +184,10 @@ class Subscription(Base):
     payment_status = Column(String(50))  # active/expired/cancelled
     auto_renew = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Additional fields for subscription management
+    plan_details = Column(JSON)  # Store plan configuration
+    discount_applied = Column(Float, default=0.0)  # Discount percentage
+    original_amount = Column(Float)  # Original price before discount
     
     # Relationships
     user = relationship("User", back_populates="subscriptions")
@@ -195,13 +199,18 @@ class Payment(Base):
     __tablename__ = "payments"
     
     payment_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.subscription_id"))
+    subscription_id = Column(Integer, ForeignKey("subscriptions.subscription_id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.user_id"))
     amount = Column(Float)
     payment_method = Column(String(50))
     transaction_id = Column(String(255), unique=True)
     status = Column(String(50))  # success/failed/pending
     payment_date = Column(DateTime, default=datetime.utcnow)
+    # Razorpay specific fields
+    razorpay_order_id = Column(String(255))
+    razorpay_payment_id = Column(String(255))
+    razorpay_signature = Column(String(500))
+    invoice_url = Column(String(500))  # Path to generated invoice PDF
     
     # Relationships
     subscription = relationship("Subscription", back_populates="payments")
@@ -223,6 +232,9 @@ class Report(Base):
     user = relationship("User", back_populates="reports")
     exam = relationship("Exam", back_populates="reports")
     attempt = relationship("ExamAttempt", back_populates="reports")
+
+
+
 
 
 # ============================================================================

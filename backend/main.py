@@ -13,17 +13,34 @@ import shutil
 import os
 import bcrypt
 from rag_service import RAGAgent
+from model_service import ModelService
 from database import (
     get_db, init_db, User, Exam, Question, ExamAttempt, 
     Answer, StudyMaterial, Subscription, Payment, Report
 )
+from subscription_routes import router as subscription_router
+from performance_routes import router as performance_router
+
+
+from exam_type_service import ExamTypeService
 
 app = FastAPI(title="ExamAI RAG Backend - PostgreSQL")
+
+# Include subscription routes
+app.include_router(subscription_router)
+
+# Include performance analytics routes
+app.include_router(performance_router)
+
+
+
+# Include exam pattern management routes
+
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Allow Next.js app
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -65,6 +82,10 @@ class QuestionRequest(BaseModel):
     subject: str
     difficulty: str
     count: int
+    exam_type: Optional[str] = None
+    model_provider: Optional[str] = None
+    model_name: Optional[str] = None
+    temperature: Optional[float] = None
 
 class QuestionResponse(BaseModel):
     id: str
@@ -153,20 +174,132 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     db.commit()
     
     print(f"✅ Login successful: {user.username}")
-    return {"message": "Login successful", "username": user.username, "role": db_user.role}
+    return {
+        "message": "Login successful", 
+        "username": user.username, 
+        "full_name": db_user.full_name,
+        "role": db_user.role, 
+        "user_id": db_user.user_id
+    }
+
+# ============================================================================
+# Exam Type Management Endpoints
+# ============================================================================
+
+@app.get("/exam-types")
+def get_exam_types():
+    """Get all available exam types (IIT/JEE, NEET, EAMCET)"""
+    try:
+        exam_types = ExamTypeService.get_all_exam_types()
+        return {"exam_types": exam_types}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/exam-types/{exam_type_id}")
+def get_exam_type(exam_type_id: str):
+    """Get specific exam type details"""
+    try:
+        exam_type = ExamTypeService.get_exam_type(exam_type_id)
+        if not exam_type:
+            raise HTTPException(status_code=404, detail="Exam type not found")
+        return exam_type
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/exam-types/{exam_type_id}/subjects")
+def get_exam_subjects(exam_type_id: str):
+    """Get subjects for a specific exam type"""
+    try:
+        subjects = ExamTypeService.get_subjects_for_exam_type(exam_type_id)
+        if not subjects:
+            raise HTTPException(status_code=404, detail="Exam type not found")
+        return {"exam_type": exam_type_id, "subjects": subjects}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/exam-types/{exam_type_id}/syllabus")
+def get_exam_syllabus(exam_type_id: str, subject: Optional[str] = None):
+    """Get syllabus for exam type and optional subject"""
+    try:
+        syllabus = ExamTypeService.get_syllabus_for_exam_type(exam_type_id, subject)
+        if not syllabus:
+            raise HTTPException(status_code=404, detail="Syllabus not found")
+        return {"exam_type": exam_type_id, "syllabus": syllabus}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/exams/create")
+def create_exam(exam_type_id: str, db: Session = Depends(get_db)):
+    """Create an exam based on exam type"""
+    try:
+        # For now, use a default admin user ID (1)
+        # TODO: Get from authenticated user
+        exam = ExamTypeService.create_exam_in_db(db, exam_type_id, created_by=1)
+        if not exam:
+            raise HTTPException(status_code=400, detail="Invalid exam type")
+        
+        return {
+            "message": "Exam created successfully",
+            "exam_id": exam.exam_id,
+            "exam_type": exam.exam_type,
+            "exam_name": exam.exam_name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# Model Management Endpoints
+# ============================================================================
+
+@app.get("/models")
+def get_available_models():
+    """Get all available AI models"""
+    try:
+        models = ModelService.list_available_models()
+        return {
+            "models": models,
+            "default": ModelService.get_default_config()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/models/{provider}")
+def get_provider_models(provider: str):
+    """Get models for a specific provider"""
+    try:
+        all_models = ModelService.list_available_models()
+        if provider not in all_models:
+            raise HTTPException(status_code=404, detail=f"Provider {provider} not found")
+        return all_models[provider]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
 # Question Generation Endpoints
 # ============================================================================
 
 @app.post("/generate-questions", response_model=List[QuestionResponse])
-def generate_questions(request: QuestionRequest):
-    """Generate questions using RAG"""
+async def generate_questions(request: QuestionRequest):
+    """Generate questions using RAG with optional model selection"""
     try:
-        questions = rag_agent.generate_questions(
+        questions = await rag_agent.generate_questions(
             subject=request.subject,
             difficulty=request.difficulty,
-            count=request.count
+            count=request.count,
+            exam_type=request.exam_type,
+            model_provider=request.model_provider,
+            model_name=request.model_name,
+            temperature=request.temperature
         )
         return questions
     except Exception as e:
@@ -179,11 +312,15 @@ def generate_questions(request: QuestionRequest):
 @app.post("/submit-exam")
 def submit_exam(result: ExamResultSubmit, db: Session = Depends(get_db)):
     """Submit exam results"""
+    print(f"📥 Received exam submission for: {result.username}")
     try:
         # Find user
         user = db.query(User).filter(User.email == result.username).first()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            print(f"❌ User not found: {result.username}")
+            raise HTTPException(status_code=404, detail=f"User {result.username} not found")
+        
+        print(f"👤 Found user: {user.user_id}, saving attempt...")
         
         # For now, create a basic exam attempt record
         # TODO: Link to actual exam_id when exam management is implemented
@@ -202,10 +339,17 @@ def submit_exam(result: ExamResultSubmit, db: Session = Depends(get_db)):
         
         db.add(exam_attempt)
         db.commit()
+        print(f"✅ Exam result saved successfully for {result.username}")
         
         return {"message": "Exam result saved successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        print(f"❌ Error saving exam result: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 # ============================================================================
 # Document Management Endpoints
@@ -220,6 +364,7 @@ async def get_documents(db: Session = Depends(get_db)):
             "id": m.material_id,
             "filename": m.title,
             "subject": m.subject,
+            "topic": m.topic,  # This stores the exam_type
             "upload_date": m.created_at.isoformat() if m.created_at else None
         } for m in materials]
     except Exception as e:
@@ -229,6 +374,7 @@ async def get_documents(db: Session = Depends(get_db)):
 async def upload_document(
     file: UploadFile = File(...), 
     subject: str = Form("mixed"),
+    exam_type: str = Form("IIT_JEE"),
     db: Session = Depends(get_db)
 ):
     """Upload and process document"""
@@ -255,11 +401,11 @@ async def upload_document(
         # Record in database
         study_material = StudyMaterial(
             title=file.filename,
-            description=f"Uploaded document for {subject}",
+            description=f"Uploaded document for {subject} - {exam_type}",
             file_url=file_path,
             material_type="PDF",
-            subject=subject,
-            topic=None,
+            subject=f"{exam_type}:{subject}",  # Store exam_type with subject
+            topic=exam_type,  # Store exam_type in topic field
             exam_id=None,  # Will be set when exam management is implemented
             uploaded_by=None,  # TODO: Get from authenticated user
             created_at=datetime.utcnow()
