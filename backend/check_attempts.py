@@ -1,41 +1,54 @@
 """
-Check Exam Attempts Script
-Verifies if there is any data in the exam_attempts table
+Debug script to check exam attempts in database
 """
-
-import logging
-logging.basicConfig()
-logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
-
 from database import get_db, ExamAttempt, User
-from sqlalchemy.orm import Session
-import json
+from sqlalchemy import func
 
-def check_attempts():
+def check_exam_attempts():
     db = next(get_db())
-    try:
-        # Get all users
-        users = db.query(User).all()
-        print(f"\n👥 Total Users: {len(users)}\n")
+    
+    print("\n" + "="*60)
+    print("CHECKING EXAM ATTEMPTS IN DATABASE")
+    print("="*60)
+    
+    # Get all users
+    users = db.query(User).all()
+    print(f"\nTotal Users: {len(users)}")
+    
+    for user in users:
+        print(f"\n--- User: {user.email} (ID: {user.user_id}) ---")
         
-        for user in users:
-            # Get attempts for this user
-            attempts = db.query(ExamAttempt).filter(ExamAttempt.user_id == user.user_id).all()
-            
-            if attempts:
-                print(f"✅ User: {user.email} (ID: {user.user_id}) has {len(attempts)} attempts")
-                for attempt in attempts:
-                    print(f"    - Attempt {attempt.attempt_id}: Score {attempt.score}/{attempt.total_questions}, Date: {attempt.end_time}")
-            else:
-                pass
-                # print(f"❌ User: {user.email} (ID: {user.user_id}) has 0 attempts")
-                
-        # global count
-        total_attempts = db.query(ExamAttempt).count()
-        print(f"\n📊 Total attempts in database: {total_attempts}\n")
+        # Get exam attempts for this user
+        attempts = db.query(ExamAttempt).filter(
+            ExamAttempt.user_id == user.user_id
+        ).all()
         
-    finally:
-        db.close()
+        print(f"  Exam Attempts: {len(attempts)}")
+        
+        if attempts:
+            for attempt in attempts:
+                print(f"    - Attempt ID: {attempt.attempt_id}")
+                print(f"      Score: {attempt.score}/{attempt.total_questions}")
+                print(f"      Started: {attempt.start_time}")
+                print(f"      Completed: {attempt.end_time}")
+                print(f"      Status: {attempt.status}")
+    
+    # Check all exam attempts regardless of user
+    print("\n" + "="*60)
+    print("ALL EXAM ATTEMPTS")
+    print("="*60)
+    
+    all_attempts = db.query(ExamAttempt).all()
+    print(f"\nTotal Exam Attempts: {len(all_attempts)}")
+    
+    for attempt in all_attempts:
+        print(f"\n  Attempt ID: {attempt.attempt_id}")
+        print(f"  User ID: {attempt.user_id}")
+        print(f"  Score: {attempt.score}/{attempt.total_questions}")
+        print(f"  Started: {attempt.start_time}")
+        print(f"  Status: {attempt.status}")
+    
+    db.close()
 
 if __name__ == "__main__":
-    check_attempts()
+    check_exam_attempts()

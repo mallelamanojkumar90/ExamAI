@@ -29,7 +29,7 @@ class PerformanceService:
         # Get all exam attempts for the user
         attempts = db.query(ExamAttempt).filter(
             ExamAttempt.user_id == user_id
-        ).order_by(desc(ExamAttempt.started_at)).all()
+        ).order_by(desc(ExamAttempt.start_time)).all()
         
         if not attempts:
             return {
@@ -53,9 +53,9 @@ class PerformanceService:
         
         # Calculate time spent
         time_spent = sum(
-            (a.completed_at - a.started_at).total_seconds() / 60 
+            (a.end_time - a.start_time).total_seconds() / 60 
             for a in attempts 
-            if a.completed_at and a.started_at
+            if a.end_time and a.start_time
         )
         
         # Analyze recent trend (last 5 vs previous 5 exams)
@@ -193,13 +193,13 @@ class PerformanceService:
         
         attempts = db.query(ExamAttempt).filter(
             ExamAttempt.user_id == user_id,
-            ExamAttempt.started_at >= start_date
-        ).order_by(ExamAttempt.started_at).all()
+            ExamAttempt.start_time >= start_date
+        ).order_by(ExamAttempt.start_time).all()
         
         # Group by date
         daily_data = {}
         for attempt in attempts:
-            date_key = attempt.started_at.date().isoformat()
+            date_key = attempt.start_time.date().isoformat()
             
             if date_key not in daily_data:
                 daily_data[date_key] = {
@@ -375,7 +375,7 @@ class PerformanceService:
         """
         attempts = db.query(ExamAttempt).filter(
             ExamAttempt.user_id == user_id
-        ).order_by(desc(ExamAttempt.started_at)).limit(limit).all()
+        ).order_by(desc(ExamAttempt.start_time)).limit(limit).all()
         
         activities = []
         for attempt in attempts:
@@ -388,11 +388,11 @@ class PerformanceService:
                 "score": attempt.score,
                 "total_questions": attempt.total_questions,
                 "accuracy": round(accuracy, 2),
-                "started_at": attempt.started_at.isoformat() if attempt.started_at else None,
-                "completed_at": attempt.completed_at.isoformat() if attempt.completed_at else None,
+                "started_at": attempt.start_time.isoformat() if attempt.start_time else None,
+                "completed_at": attempt.end_time.isoformat() if attempt.end_time else None,
                 "time_taken_minutes": round(
-                    (attempt.completed_at - attempt.started_at).total_seconds() / 60, 2
-                ) if attempt.completed_at and attempt.started_at else 0
+                    (attempt.end_time - attempt.start_time).total_seconds() / 60, 2
+                ) if attempt.end_time and attempt.start_time else 0
             })
         
         return activities

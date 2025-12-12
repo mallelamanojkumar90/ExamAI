@@ -182,6 +182,64 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         "user_id": db_user.user_id
     }
 
+class GoogleSignIn(BaseModel):
+    email: str
+    name: Optional[str] = None
+    google_id: str
+
+@app.post("/auth/google-signin")
+def google_signin(google_user: GoogleSignIn, db: Session = Depends(get_db)):
+    """Handle Google OAuth sign-in"""
+    print(f"🔵 Google sign-in attempt: {google_user.email}")
+    
+    try:
+        # Check if user exists
+        db_user = db.query(User).filter(User.email == google_user.email).first()
+        
+        if db_user:
+            # Update Google ID if not set
+            if not db_user.google_id:
+                db_user.google_id = google_user.google_id
+            
+            # Update last login
+            db_user.last_login = datetime.utcnow()
+            db.commit()
+            
+            print(f"✅ Existing user logged in via Google: {google_user.email}")
+        else:
+            # Create new user
+            db_user = User(
+                email=google_user.email,
+                password_hash="",  # No password for OAuth users
+                full_name=google_user.name,
+                google_id=google_user.google_id,
+                role="student",
+                created_at=datetime.utcnow(),
+                last_login=datetime.utcnow(),
+                is_active=True
+            )
+            
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+            
+            print(f"✅ New user created via Google: {google_user.email}")
+        
+        return {
+            "message": "Google sign-in successful",
+            "username": db_user.email,
+            "full_name": db_user.full_name,
+            "role": db_user.role,
+            "user_id": db_user.user_id
+        }
+    except Exception as e:
+        import traceback
+        print(f"❌ Google sign-in error: {str(e)}")
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")
+
+
 # ============================================================================
 # Exam Type Management Endpoints
 # ============================================================================

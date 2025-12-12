@@ -39,6 +39,7 @@ class User(Base):
     full_name = Column(String(255))
     role = Column(String(50), default="student")  # student/admin
     phone_number = Column(String(20))
+    google_id = Column(String(255), unique=True, nullable=True)  # For Google OAuth
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login = Column(DateTime)
