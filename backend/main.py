@@ -21,6 +21,9 @@ from database import (
 from subscription_routes import router as subscription_router
 from performance_routes import router as performance_router
 
+# Import caching and pre-generation services
+from question_cache_service import get_cache_service
+from agentic_pregeneration_service import get_pregeneration_agent
 
 from exam_type_service import ExamTypeService
 
@@ -46,12 +49,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize services
+cache_service = get_cache_service()
+pregeneration_agent = get_pregeneration_agent()
+
 # Initialize database on startup
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     print("🚀 Starting ExamAI Backend...")
     init_db()
     print("✅ Database initialized!")
+    
+    # Warm cache with priority questions
+    if cache_service.is_enabled():
+        print("🔥 Warming question cache...")
+        import asyncio
+        asyncio.create_task(pregeneration_agent.warm_cache_on_startup())
+        print("✅ Cache warming initiated!")
+    else:
+        print("⚠️  Redis cache disabled - questions will be generated in real-time")
 
 # Security functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -348,8 +364,26 @@ def get_provider_models(provider: str):
 
 @app.post("/generate-questions", response_model=List[QuestionResponse])
 async def generate_questions(request: QuestionRequest):
-    """Generate questions using RAG with optional model selection"""
+    """Generate questions using RAG with optional model selection and caching"""
     try:
+        # 1. Generate cache key
+        cache_key = cache_service.generate_cache_key(
+            subject=request.subject,
+            difficulty=request.difficulty,
+            count=request.count,
+            exam_type=request.exam_type,
+            model_provider=request.model_provider,
+            model_name=request.model_name
+        )
+        
+        # 2. Check cache first
+        cached_questions = cache_service.get_cached_questions(cache_key)
+        if cached_questions:
+            print(f"⚡ INSTANT DELIVERY: Returning {len(cached_questions)} cached questions")
+            return cached_questions
+        
+        # 3. Cache miss - generate in real-time
+        print(f"🔄 Cache miss - generating questions in real-time...")
         questions = await rag_agent.generate_questions(
             subject=request.subject,
             difficulty=request.difficulty,
@@ -359,6 +393,20 @@ async def generate_questions(request: QuestionRequest):
             model_name=request.model_name,
             temperature=request.temperature
         )
+        
+        # 4. Store in cache for future requests
+        cache_service.set_cached_questions(cache_key, questions)
+        
+        # 5. Trigger background pre-generation for similar patterns
+        # (This helps pre-generate related difficulty levels)
+        if request.difficulty == "Medium":
+            asyncio.create_task(pregeneration_agent._generate_and_cache(
+                request.subject, "Easy", request.count, request.exam_type or "IIT_JEE"
+            ))
+            asyncio.create_task(pregeneration_agent._generate_and_cache(
+                request.subject, "Hard", request.count, request.exam_type or "IIT_JEE"
+            ))
+        
         return questions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -527,6 +575,79 @@ def get_user_activity(username: str, db: Session = Depends(get_db)):
             "total_questions": a.total_questions,
             "timestamp": a.end_time.isoformat() if a.end_time else None
         } for a in attempts]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# Cache Management Endpoints
+# ============================================================================
+
+@app.get("/cache/stats")
+def get_cache_stats():
+    """Get cache performance statistics"""
+    try:
+        stats = cache_service.get_cache_stats()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/cache/warm")
+async def warm_cache(
+    subject: str,
+    difficulty: str,
+    count: int,
+    exam_type: Optional[str] = "IIT_JEE"
+):
+    """Admin endpoint to manually warm cache with specific configuration"""
+    try:
+        # Generate questions
+        questions = await rag_agent.generate_questions(
+            subject=subject,
+            difficulty=difficulty,
+            count=count,
+            exam_type=exam_type
+        )
+        
+        # Cache them
+        success = cache_service.warm_cache(subject, difficulty, count, questions, exam_type)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Cached {len(questions)} questions for {subject}/{difficulty}/{count}",
+                "cached_count": len(questions)
+            }
+        else:
+            return {
+                "status": "failed",
+                "message": "Cache is disabled or error occurred"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/cache/invalidate")
+def invalidate_cache(pattern: str = "questions:*"):
+    """Admin endpoint to invalidate cache entries"""
+    try:
+        deleted = cache_service.invalidate_cache(pattern)
+        return {
+            "status": "success",
+            "message": f"Invalidated {deleted} cache entries",
+            "deleted_count": deleted
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/cache/pregenerate")
+async def trigger_pregeneration():
+    """Admin endpoint to trigger background pre-generation"""
+    try:
+        import asyncio
+        asyncio.create_task(pregeneration_agent.warm_cache_on_startup())
+        return {
+            "status": "success",
+            "message": "Background pre-generation triggered"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -186,6 +186,9 @@ class RAGAgent:
                 all_questions.extend(batch)
             
             # Final validation and cleanup
+            # Filter out dependent questions
+            all_questions = self._filter_independent_questions(all_questions)
+            
             # Trim or pad if necessary (though batching should prevent this)
             if len(all_questions) > count:
                 all_questions = all_questions[:count]
@@ -210,6 +213,58 @@ class RAGAgent:
                 "correctAnswer": 0,
                 "explanation": str(e)
             }]
+
+    def _filter_independent_questions(self, questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out questions that are dependent on other questions.
+        Returns only independent, standalone questions.
+        """
+        # Patterns that indicate question dependency
+        dependency_patterns = [
+            # Direct references to other questions
+            r'\b(?:previous|above|earlier|prior|preceding)\s+(?:question|problem|example)\b',
+            r'\b(?:question|problem|Q)\s*(?:#|number|no\.?)\s*\d+\b',
+            r'\bfrom\s+(?:the\s+)?(?:previous|above|earlier)\b',
+            r'\bas\s+(?:shown|given|stated|mentioned)\s+(?:in|above|earlier|previously)\b',
+            
+            # References to "the question" or "this question" in dependent context
+            r'\busing\s+(?:the\s+)?(?:result|answer|value)\s+from\b',
+            r'\bbased\s+on\s+(?:the\s+)?(?:previous|above|earlier)\b',
+            r'\brefer(?:ring)?\s+to\s+(?:the\s+)?(?:previous|above|earlier)\b',
+            
+            # Continuation phrases
+            r'\bcontinuing\s+from\b',
+            r'\bin\s+continuation\b',
+            r'\bfollowing\s+from\s+(?:the\s+)?(?:previous|above)\b',
+            
+            # Part references
+            r'\bpart\s+\(?\s*[a-z]\s*\)?\s*of\s+(?:the\s+)?(?:question|problem)\b',
+            r'\b(?:sub)?part\s+\d+\b',
+        ]
+        
+        import re
+        independent_questions = []
+        filtered_count = 0
+        
+        for q in questions:
+            question_text = q.get('text', '').lower()
+            is_dependent = False
+            
+            # Check against all dependency patterns
+            for pattern in dependency_patterns:
+                if re.search(pattern, question_text, re.IGNORECASE):
+                    is_dependent = True
+                    filtered_count += 1
+                    print(f"  🚫 Filtered dependent question: '{q.get('text', '')[:60]}...'")
+                    break
+            
+            if not is_dependent:
+                independent_questions.append(q)
+        
+        if filtered_count > 0:
+            print(f"  ✅ Filtered out {filtered_count} dependent questions, {len(independent_questions)} independent questions remain")
+        
+        return independent_questions
 
     async def _generate_batch_async(
         self, subject: str, difficulty: str, count: int, 
@@ -247,6 +302,8 @@ Generate EXACTLY {count} UNIQUE questions about {subject}.
 Difficulty: {difficulty}
 Random Seed: {random_seed}
 
+IMPORTANT: Each question MUST be completely INDEPENDENT. Do NOT reference other questions.
+
 Return a JSON array with EXACTLY {count} objects:
 [
   {{
@@ -266,10 +323,13 @@ Random Seed: {random_seed}
 CONTEXT:
 {context_str[:15000]} 
 
-RULES:
+CRITICAL RULES:
 1. ONLY use the context.
-2. clean the data (no "Q1" prefixes).
-3. Return VALID JSON array.
+2. Each question MUST be completely INDEPENDENT - do NOT reference other questions.
+3. NO phrases like "previous question", "above question", "question X", "based on earlier".
+4. Each question must be answerable standalone.
+5. Clean the data (no "Q1" prefixes).
+6. Return VALID JSON array.
 
 Return a JSON array with EXACTLY {count} objects:
 [

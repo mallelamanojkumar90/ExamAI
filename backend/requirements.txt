@@ -20,3 +20,5 @@ alembic
 razorpay==1.4.1
 python-dateutil==2.8.2
 reportlab==4.0.7
+# Redis for question caching
+redis==5.0.1
