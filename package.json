@@ -1,0 +1,15 @@
+{
+    "name": "exam-ai-platform",
+    "version": "1.0.0",
+    "description": "ExamAI Platform - Full Stack Application",
+    "scripts": {
+        "dev": "concurrently --kill-others \"npm run backend\" \"npm run frontend\"",
+        "backend": "cd backend && .\\venv311\\Scripts\\activate && set PYTHONIOENCODING=utf-8 && python -m uvicorn main:app --reload --port 8000",
+        "frontend": "cd exam-app && npm run dev",
+        "install:all": "cd exam-app && npm install",
+        "install:backend": "cd backend && .\\venv311\\Scripts\\activate && pip install -r requirements.txt"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
