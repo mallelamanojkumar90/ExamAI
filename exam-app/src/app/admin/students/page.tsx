@@ -3,6 +3,7 @@
 import { useState, useEffect, Fragment } from "react";
 import Navbar from "@/components/Navbar";
 import { User, Calendar, Award, Clock, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { apiUrl } from "@/lib/config";
 
 interface UserData {
     username: string;
@@ -34,7 +35,7 @@ export default function StudentsPage() {
 
     const fetchUsers = async () => {
         try {
-            const res = await fetch("http://localhost:8000/admin/users");
+            const res = await fetch(apiUrl("/admin/users"));
             if (res.ok) {
                 const data = await res.json();
                 setUsers(data);
@@ -51,7 +52,7 @@ export default function StudentsPage() {
 
         setLoadingActivity(username);
         try {
-            const res = await fetch(`http://localhost:8000/admin/user/${username}/activity`);
+            const res = await fetch(apiUrl(`/admin/user/${username}/activity`));
             if (res.ok) {
                 const data = await res.json();
                 setActivityData(prev => ({ ...prev, [username]: data }));

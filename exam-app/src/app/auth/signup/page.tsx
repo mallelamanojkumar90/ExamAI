@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Mail, Lock, User, ArrowRight, Sparkles } from "lucide-react";
+import { apiUrl } from "@/lib/config";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function SignupPage() {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:8000/auth/signup", {
+      const response = await fetch(apiUrl("/auth/signup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -38,7 +39,7 @@ export default function SignupPage() {
 
       if (response.ok) {
         // Auto-login after successful signup
-        const loginResponse = await fetch("http://localhost:8000/auth/login", {
+        const loginResponse = await fetch(apiUrl("/auth/login"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

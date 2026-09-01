@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, CreditCard, CheckCircle } from "lucide-react";
+import { apiUrl } from "@/lib/config";
 
 declare global {
   interface Window {
@@ -20,7 +21,7 @@ interface Plan {
   features: string[];
 }
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const planType = searchParams.get("plan");
@@ -59,9 +60,7 @@ export default function CheckoutPage() {
 
   const fetchPlanDetails = async (planId: string) => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/subscription/plan/${planId}`
-      );
+      const response = await fetch(apiUrl(`/api/subscription/plan/${planId}`));
       const data = await response.json();
       if (data.success) {
         setPlan(data.plan);
@@ -80,9 +79,7 @@ export default function CheckoutPage() {
 
     try {
       // Create order
-      const orderResponse = await fetch(
-        "http://localhost:8000/api/payment/create-order",
-        {
+      const orderResponse = await fetch(apiUrl("/api/payment/create-order"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -91,8 +88,7 @@ export default function CheckoutPage() {
             user_id: userId,
             plan_type: plan.id,
           }),
-        }
-      );
+        });
 
       const orderData = await orderResponse.json();
 
@@ -111,9 +107,7 @@ export default function CheckoutPage() {
         handler: async function (response: any) {
           // Verify payment
           try {
-            const verifyResponse = await fetch(
-              "http://localhost:8000/api/payment/verify",
-              {
+            const verifyResponse = await fetch(apiUrl("/api/payment/verify"), {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -125,8 +119,7 @@ export default function CheckoutPage() {
                   user_id: userId,
                   plan_type: plan.id,
                 }),
-              }
-            );
+              });
 
             const verifyData = await verifyResponse.json();
 
@@ -298,5 +291,13 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">Loading checkout...</div>}>
+      <CheckoutContent />
+    </Suspense>
   );
 }

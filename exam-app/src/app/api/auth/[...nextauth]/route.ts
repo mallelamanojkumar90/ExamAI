@@ -2,6 +2,13 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+function apiUrl(path: string): string {
+  const base = API_BASE_URL.replace(/\/$/, "");
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export const authOptions = {
   providers: [
     GoogleProvider({
@@ -20,7 +27,7 @@ export const authOptions = {
         }
 
         try {
-          const response = await fetch("http://localhost:8000/auth/login", {
+          const response = await fetch(apiUrl("/auth/login"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -53,7 +60,7 @@ export const authOptions = {
       if (account?.provider === "google") {
         try {
           // Check if user exists or create new user via backend
-          const response = await fetch("http://localhost:8000/auth/google-signin", {
+          const response = await fetch(apiUrl("/auth/google-signin"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

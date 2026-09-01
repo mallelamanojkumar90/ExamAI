@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react";
+import { apiUrl } from "@/lib/config";
 
 interface Subscription {
   subscription_id: number;
@@ -45,9 +46,7 @@ export default function SubscriptionDashboardPage() {
 
   const fetchSubscriptionStatus = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/subscription/status/${userId}`
-      );
+      const response = await fetch(apiUrl(`/api/subscription/status/${userId}`));
       const data = await response.json();
       if (data.success && data.has_active_subscription) {
         setSubscription(data.subscription);
@@ -61,9 +60,7 @@ export default function SubscriptionDashboardPage() {
 
   const fetchPaymentHistory = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/payment/history/${userId}`
-      );
+      const response = await fetch(apiUrl(`/api/payment/history/${userId}`));
       const data = await response.json();
       if (data.success) {
         setPayments(data.payments);
@@ -75,9 +72,7 @@ export default function SubscriptionDashboardPage() {
 
   const handleDownloadInvoice = async (paymentId: number) => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/payment/invoice/${paymentId}`
-      );
+      const response = await fetch(apiUrl(`/api/payment/invoice/${paymentId}`));
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");

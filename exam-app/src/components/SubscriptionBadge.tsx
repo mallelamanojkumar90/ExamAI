@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Crown, Clock } from "lucide-react";
+import { apiUrl } from "@/lib/config";
 
 interface SubscriptionBadgeProps {
   userId: number;
@@ -23,9 +24,7 @@ export default function SubscriptionBadge({
 
   const fetchSubscriptionStatus = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/subscription/status/${userId}`
-      );
+      const response = await fetch(apiUrl(`/api/subscription/status/${userId}`));
       const data = await response.json();
       if (data.success && data.has_active_subscription) {
         setHasSubscription(true);

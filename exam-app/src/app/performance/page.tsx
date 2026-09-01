@@ -15,6 +15,7 @@ import {
   Activity,
   ChevronRight,
 } from "lucide-react";
+import { apiUrl } from "@/lib/config";
 
 interface PerformanceSummary {
   total_exams: number;
@@ -127,9 +128,7 @@ export default function PerformanceDashboard() {
 
   const fetchDashboardData = async (userId: number) => {
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/performance/dashboard/${userId}`
-      );
+      const response = await fetch(apiUrl(`/api/performance/dashboard/${userId}`));
       const data = await response.json();
 
       if (data.success) {

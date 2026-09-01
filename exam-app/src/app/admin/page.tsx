@@ -9,6 +9,7 @@ import {
     RefreshCw, Database
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { apiUrl } from "@/lib/config";
 
 interface Document {
     id: number;
@@ -52,7 +53,7 @@ export default function AdminDashboard() {
     // Fetch document list
     const fetchDocuments = async () => {
         try {
-            const res = await fetch("http://localhost:8000/documents");
+            const res = await fetch(apiUrl("/documents"));
             if (res.ok) {
                 const data = await res.json();
                 setDocuments(data);
@@ -69,7 +70,7 @@ export default function AdminDashboard() {
         setSyncing(true);
         try {
             await fetchDocuments();
-            const res = await fetch("http://localhost:8000/debug/index-stats");
+            const res = await fetch(apiUrl("/debug/index-stats"));
             if (res.ok) {
                 const { stats } = await res.json();
                 setVectorStats(stats);
@@ -112,7 +113,7 @@ export default function AdminDashboard() {
                 // The backend currently takes subject defaults to 'mixed' if not provided, 
                 // but we are using exam_type to determine context.
                 
-                const res = await fetch("http://localhost:8000/upload-document", {
+                const res = await fetch(apiUrl("/upload-document"), {
                     method: "POST",
                     body: formData,
                 });

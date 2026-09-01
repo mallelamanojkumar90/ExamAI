@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar";
 import Timer from "@/components/Timer";
 import { QuestionPalette } from "@/components/QuestionPalette";
 import { fetchQuestions, Question } from "@/lib/api";
+import { apiUrl } from "@/lib/config";
 
 function ExamContent() {
     const searchParams = useSearchParams();
@@ -144,7 +145,7 @@ function ExamContent() {
         // Save result to backend
         if (user) {
             try {
-                const response = await fetch("http://localhost:8000/submit-exam", {
+                const response = await fetch(apiUrl("/submit-exam"), {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",

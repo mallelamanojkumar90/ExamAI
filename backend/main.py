@@ -41,9 +41,25 @@ app.include_router(performance_router)
 
 
 # Configure CORS
+_default_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+]
+_frontend_url = os.getenv("FRONTEND_URL")
+if _frontend_url and _frontend_url not in _default_origins:
+    _default_origins.append(_frontend_url)
+
+_extra_origins = os.getenv("ALLOWED_ORIGINS", "")
+if _extra_origins:
+    _default_origins.extend(
+        origin.strip() for origin in _extra_origins.split(",") if origin.strip()
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://localhost:3002"],
+    allow_origins=_default_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

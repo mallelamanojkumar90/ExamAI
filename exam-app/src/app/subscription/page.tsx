@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Sparkles } from "lucide-react";
+import { apiUrl } from "@/lib/config";
 
 interface Plan {
   id: string;
@@ -27,7 +28,7 @@ export default function SubscriptionPage() {
 
   const fetchPlans = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/subscription/plans");
+      const response = await fetch(apiUrl("/api/subscription/plans"));
       const data = await response.json();
       if (data.success) {
         setPlans(data.plans);
