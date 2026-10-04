@@ -10,6 +10,9 @@ langchain-google-genai
 langchain-anthropic
 langchain-core
 pypdf
+pymupdf
+pillow
+pytesseract
 python-dotenv
 # PostgreSQL and Database
 psycopg2-binary
