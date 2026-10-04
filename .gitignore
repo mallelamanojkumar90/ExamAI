@@ -71,6 +71,17 @@ uploads/
 *.docx
 *.pptx
 
+# One-off Supabase import dumps (may contain user records)
+backend/mcp_batches/
+backend/mcp_query_out/
+backend/supabase_batches/
+backend/supabase_data_export.sql
+backend/supabase_remaining_import.sql
+backend/batch_users.sql
+backend/mcp_execute_payload.json
+backend/remaining_payload.json
+backend/import_query.txt
+
 # OS
 Thumbs.db
 .DS_Store

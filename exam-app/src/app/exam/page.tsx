@@ -25,6 +25,30 @@ function ExamContent() {
     const [submitted, setSubmitted] = useState(false);
     const [score, setScore] = useState(0);
     const [questionStatuses, setQuestionStatuses] = useState<Record<number, { answered: boolean; markedForReview: boolean }>>({});
+    const [user, setUser] = useState<string | null>(null);
+    const [userReady, setUserReady] = useState(false);
+    const [attemptId, setAttemptId] = useState<number | null>(null);
+    const [resumed, setResumed] = useState(false);
+
+    const progressKey = user ? `inProgressExam:${user}:${examType}:${difficulty}` : null;
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+            try {
+                if (storedUser.startsWith("{")) {
+                    const userData = JSON.parse(storedUser);
+                    setUser(userData.email || userData.username || storedUser);
+                } else {
+                    setUser(storedUser);
+                }
+            } catch (error) {
+                console.error("Failed to parse user data", error);
+                setUser(storedUser);
+            }
+        }
+        setUserReady(true);
+    }, []);
 
     // Exam configurations
     const examConfigs: Record<string, { subjects: string[], questionsPerSubject: number, duration: number }> = {
@@ -46,8 +70,42 @@ function ExamContent() {
     };
 
     useEffect(() => {
+        if (!userReady) return;
+
         const loadQuestions = async () => {
             try {
+                if (user && progressKey) {
+                    const savedId = sessionStorage.getItem(progressKey);
+                    if (savedId) {
+                        const savedResponse = await fetch(
+                            apiUrl(`/exams/attempts/${savedId}?username=${encodeURIComponent(user)}`)
+                        );
+                        if (savedResponse.ok) {
+                            const saved = await savedResponse.json();
+                            if (saved.status === "in_progress" && saved.questions?.length) {
+                                setQuestions(saved.questions);
+                                const restoredAnswers: Record<number, number> = {};
+                                const restoredStatuses: Record<number, { answered: boolean; markedForReview: boolean }> = {};
+                                for (const response of saved.responses || []) {
+                                    if (response.selected_option !== null && response.selected_option !== undefined) {
+                                        restoredAnswers[response.question_index] = response.selected_option;
+                                    }
+                                    restoredStatuses[response.question_index] = {
+                                        answered: response.selected_option !== null && response.selected_option !== undefined,
+                                        markedForReview: Boolean(response.marked_for_review),
+                                    };
+                                }
+                                setAnswers(restoredAnswers);
+                                setQuestionStatuses(restoredStatuses);
+                                setAttemptId(saved.attempt_id);
+                                setResumed(true);
+                                return;
+                            }
+                        }
+                        sessionStorage.removeItem(progressKey);
+                    }
+                }
+
                 let data: Question[] = [];
                 
                 // Check if this is a configured exam type
@@ -73,6 +131,31 @@ function ExamContent() {
                 }
                 
                 setQuestions(data);
+
+                if (user && progressKey && data.length > 0) {
+                    const startResponse = await fetch(apiUrl("/exams/attempts/start"), {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            username: user,
+                            exam_type: examType,
+                            subject,
+                            difficulty,
+                            questions: data.map((question) => ({
+                                text: question.text,
+                                options: question.options,
+                                correctAnswer: question.correctAnswer,
+                                explanation: question.explanation,
+                                subject: question.subject || subject,
+                            })),
+                        }),
+                    });
+                    if (startResponse.ok) {
+                        const started = await startResponse.json();
+                        setAttemptId(started.attempt_id);
+                        sessionStorage.setItem(progressKey, String(started.attempt_id));
+                    }
+                }
             } catch (error) {
                 console.error("Failed to load questions", error);
             } finally {
@@ -80,7 +163,7 @@ function ExamContent() {
             }
         };
         loadQuestions();
-    }, [examType, subject, difficulty, count]);
+    }, [userReady, user, progressKey, examType, subject, difficulty, count]);
 
     const handleAnswer = (optionIndex: number) => {
         if (submitted) return;
@@ -110,28 +193,6 @@ function ExamContent() {
         setCurrentQuestionIndex(index);
     };
 
-    const [user, setUser] = useState<string | null>(null);
-
-    useEffect(() => {
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-            try {
-                if (storedUser.startsWith("{")) {
-                    const userData = JSON.parse(storedUser);
-                    // 1. Try email (most likely for unique ID)
-                    // 2. Try username
-                    // 3. Fallback to just using the parsed object if it was somehow a string wrapped in quotes? No.
-                    setUser(userData.email || userData.username || storedUser);
-                } else {
-                    setUser(storedUser);
-                }
-            } catch (error) {
-                console.error("Failed to parse user data", error);
-                setUser(storedUser);
-            }
-        }
-    }, []);
-
     const handleSubmit = async () => {
         let newScore = 0;
         questions.forEach((q, index) => {
@@ -154,14 +215,31 @@ function ExamContent() {
                         username: user,
                         subject: subject,
                         difficulty: difficulty,
+                        exam_type: examType,
                         score: newScore,
                         total_questions: questions.length,
+                        attempt_id: attemptId,
+                        questions: questions.map((question) => ({
+                            text: question.text,
+                            options: question.options,
+                            correctAnswer: question.correctAnswer,
+                            explanation: question.explanation,
+                            subject: question.subject || subject,
+                        })),
+                        responses: questions.map((_, index) => ({
+                            question_index: index,
+                            selected_option: answers[index] ?? null,
+                            marked_for_review: questionStatuses[index]?.markedForReview || false,
+                        })),
                     }),
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || `Server responded with ${response.status}`);
+                }
+                if (progressKey) {
+                    sessionStorage.removeItem(progressKey);
                 }
             } catch (error) {
                 console.error("Failed to save exam result", error);
@@ -175,6 +253,36 @@ function ExamContent() {
             handleSubmit();
             alert("Time is up! Your exam has been submitted.");
         }
+    };
+
+    useEffect(() => {
+        if (!attemptId || !user || submitted || loading) return;
+
+        const timer = window.setTimeout(() => {
+            fetch(apiUrl(`/exams/attempts/${attemptId}/progress`), {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username: user,
+                    responses: questions.map((_, index) => ({
+                        question_index: index,
+                        selected_option: answers[index] ?? null,
+                        marked_for_review: questionStatuses[index]?.markedForReview || false,
+                    })),
+                }),
+            }).catch((error) => {
+                console.error("Failed to save exam progress", error);
+            });
+        }, 500);
+
+        return () => window.clearTimeout(timer);
+    }, [answers, questionStatuses, attemptId, user, submitted, loading, questions]);
+
+    const startFreshPaper = () => {
+        if (progressKey) {
+            sessionStorage.removeItem(progressKey);
+        }
+        window.location.reload();
     };
 
     if (loading) {
@@ -731,7 +839,15 @@ function ExamContent() {
                                 {examType.replace('_', '/')} 
                                 {examConfigs[examType] ? ` - ${currentQuestion?.subject || "All Subjects"}` : ` - ${subject}`} Exam
                             </h1>
-                            <div className="text-xs text-slate-400">Question {currentQuestionIndex + 1} of {questions.length}</div>
+                            <div className="text-xs text-slate-400">
+                                Question {currentQuestionIndex + 1} of {questions.length}
+                                {resumed ? " · Resumed" : ""}
+                                {resumed ? (
+                                    <button type="button" onClick={startFreshPaper} className="ml-2 text-primary hover:underline">
+                                        Start a new paper
+                                    </button>
+                                ) : null}
+                            </div>
                         </div>
                     </div>
 

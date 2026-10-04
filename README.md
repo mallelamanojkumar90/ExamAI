@@ -24,10 +24,11 @@ For detailed setup instructions, see [STARTUP_GUIDE.md](./STARTUP_GUIDE.md)
 - **AI-Powered Question Generation**: Generate exam questions using advanced AI models
 - **Multiple Exam Types**: Support for IIT-JEE, NEET, and EAMCET
 - **Document Upload**: Upload study materials for RAG-based question generation
-- **Performance Analytics**: Track your progress and performance over time
-- **Subscription Management**: Flexible subscription plans
+- **Performance Analytics**: Accuracy, subject and difficulty breakdown, trends, peer comparison, and recommendations
+- **Exam Taking**: Timer, question palette, mark for review, and save-and-resume
+- **Subscription Management**: Monthly, quarterly, and annual plans with Razorpay
 - **Multi-Model Support**: Choose from various AI models for question generation
-- **Question Caching**: Fast question delivery with intelligent caching
+- **Question Caching**: Redis cache for repeated question sets
 - **Google OAuth**: Sign in with your Google account
 
 ## 🛠️ Tech Stack
@@ -111,9 +112,12 @@ Exam/
    DATABASE_URL=postgresql://user:password@localhost:5432/examai
    PINECONE_API_KEY=your_pinecone_api_key
    OPENAI_API_KEY=your_openai_api_key
-   REDIS_URL=redis://localhost:6379
+   REDIS_HOST=localhost
+   REDIS_PORT=6379
    PORT=8000
    ```
+
+   Local Postgres does not use SSL. A Supabase `DATABASE_URL` does. Redis is optional; if it is not running, questions are generated live and are not cached.
 
 4. **Run the application**
    ```bash
@@ -174,13 +178,18 @@ For detailed Git workflows, see [GIT_GUIDE.md](./GIT_GUIDE.md)
 - `POST /upload-document` - Upload study material
 - `GET /documents` - List uploaded documents
 
+### Exam attempts
+- `POST /exams/attempts/start` - Save a generated paper so it can be resumed
+- `GET /exams/attempts/{attempt_id}` - Load a saved paper
+- `PUT /exams/attempts/{attempt_id}/progress` - Save answers in progress
+- `POST /submit-exam` - Finish an attempt and store each question and answer
+
 ### Performance
-- `GET /performance/analytics` - Get performance analytics
-- `GET /performance/subject-wise` - Subject-wise performance
+- `GET /api/performance/dashboard/{user_id}` - Summary, timeline, peers, and recommendations
 
 ### Subscription
-- `GET /subscription/plans` - Get subscription plans
-- `POST /subscription/subscribe` - Subscribe to a plan
+- `GET /api/subscription/plans` - Get subscription plans
+- `POST /api/payment/create-order` - Start a Razorpay checkout
 
 For complete API documentation, visit http://localhost:8000/docs after starting the backend.
 
@@ -200,18 +209,9 @@ npm test
 
 ## 🚢 Deployment
 
-### Backend Deployment
-The backend can be deployed to platforms like:
-- Render
-- Heroku
-- AWS EC2
-- Google Cloud Run
+The hosted layout is Vercel for the frontend, Render for the backend, and Supabase for Postgres. See [DEPLOYMENT.md](./DEPLOYMENT.md).
 
-### Frontend Deployment
-The frontend can be deployed to:
-- Vercel (recommended for Next.js)
-- Netlify
-- AWS Amplify
+The schema migration is `backend/supabase/migrations/20260301120000_initial_exam_schema.sql`. `backend/migrate_to_supabase.py` copies rows from a local Postgres database when `SOURCE_DATABASE_URL` and `DATABASE_URL` are set. Do not commit exported SQL; those dumps can contain user records.
 
 ## 🤝 Contributing
 

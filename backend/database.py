@@ -14,9 +14,28 @@ load_dotenv()
 
 # Database URL from environment variable
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///exam_app.db")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+
+# Remote Postgres (Supabase) requires SSL. Local Postgres does not.
+connect_args = {}
+if DATABASE_URL.startswith("postgresql"):
+    local_hosts = ("localhost", "127.0.0.1", "@localhost", "@127.0.0.1")
+    if any(host in DATABASE_URL for host in local_hosts):
+        connect_args = {"connect_timeout": 30}
+    else:
+        connect_args = {
+            "sslmode": "require",
+            "connect_timeout": 30,
+        }
 
 # Create engine
-engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+)
 
 # Create session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -233,6 +252,24 @@ class Report(Base):
     user = relationship("User", back_populates="reports")
     exam = relationship("Exam", back_populates="reports")
     attempt = relationship("ExamAttempt", back_populates="reports")
+
+
+class ExamPattern(Base):
+    """Exam pattern configuration for different exam types"""
+    __tablename__ = "exam_patterns"
+
+    pattern_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    exam_type = Column(String(100))
+    pattern_name = Column(String(255))
+    total_questions = Column(Integer)
+    total_marks = Column(Integer)
+    duration_minutes = Column(Integer)
+    sections = Column(Text)
+    negative_marking = Column(Float)
+    passing_marks = Column(Integer)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 

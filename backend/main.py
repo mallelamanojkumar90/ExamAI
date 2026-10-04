@@ -126,12 +126,76 @@ class QuestionResponse(BaseModel):
     correctAnswer: int
     explanation: Optional[str] = None
 
+def normalize_question(raw: object, index: int) -> dict:
+    """Coerce model output into the question response shape."""
+    item = raw if isinstance(raw, dict) else {}
+    options_raw = item.get("options")
+    options = [str(option) for option in options_raw if option is not None] if isinstance(options_raw, list) else []
+    options = options[:4]
+    while len(options) < 4:
+        options.append(f"Option {len(options) + 1}")
+
+    answer = item.get("correctAnswer", 0)
+    if isinstance(answer, str):
+        stripped = answer.strip()
+        if stripped.isdigit():
+            answer = int(stripped)
+        elif len(stripped) == 1 and stripped.upper() in "ABCD":
+            answer = ord(stripped.upper()) - ord("A")
+        else:
+            answer = 0
+    try:
+        answer = int(answer)
+    except (TypeError, ValueError):
+        answer = 0
+    if answer < 0 or answer > 3:
+        answer = 0
+
+    explanation = item.get("explanation")
+    if explanation is not None and not isinstance(explanation, str):
+        explanation = str(explanation)
+
+    return {
+        "id": str(item.get("id") or index + 1),
+        "text": str(item.get("text") or item.get("question") or "Question unavailable"),
+        "options": options,
+        "correctAnswer": answer,
+        "explanation": explanation,
+    }
+
+class SubmittedQuestion(BaseModel):
+    text: str
+    options: List[str]
+    correctAnswer: int
+    explanation: Optional[str] = None
+    subject: Optional[str] = None
+
+class SubmittedResponse(BaseModel):
+    question_index: int
+    selected_option: Optional[int] = None
+    marked_for_review: bool = False
+
 class ExamResultSubmit(BaseModel):
     username: str
     subject: str
     difficulty: str
     score: int
     total_questions: int
+    exam_type: Optional[str] = None
+    questions: Optional[List[SubmittedQuestion]] = None
+    responses: Optional[List[SubmittedResponse]] = None
+    attempt_id: Optional[int] = None
+
+class StartAttemptRequest(BaseModel):
+    username: str
+    exam_type: str
+    subject: str
+    difficulty: str
+    questions: List[SubmittedQuestion]
+
+class SaveProgressRequest(BaseModel):
+    username: str
+    responses: List[SubmittedResponse]
 
 class UserCreate(BaseModel):
     username: str  # Will be used as email
@@ -396,7 +460,7 @@ async def generate_questions(request: QuestionRequest):
         cached_questions = cache_service.get_cached_questions(cache_key)
         if cached_questions:
             print(f"⚡ INSTANT DELIVERY: Returning {len(cached_questions)} cached questions")
-            return cached_questions
+            return [normalize_question(question, index) for index, question in enumerate(cached_questions)]
         
         # 3. Cache miss - generate in real-time
         print(f"🔄 Cache miss - generating questions in real-time...")
@@ -411,6 +475,7 @@ async def generate_questions(request: QuestionRequest):
         )
         
         # 4. Store in cache for future requests
+        questions = [normalize_question(question, index) for index, question in enumerate(questions)]
         cache_service.set_cached_questions(cache_key, questions)
         
         # 5. Trigger background pre-generation for similar patterns
@@ -431,39 +496,304 @@ async def generate_questions(request: QuestionRequest):
 # Exam Management Endpoints
 # ============================================================================
 
+def _user_by_username(db: Session, username: str) -> User:
+    user = db.query(User).filter(User.email == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {username} not found")
+    return user
+
+
+def _active_exam(db: Session, exam_type: Optional[str], created_by: int) -> Optional[Exam]:
+    if not exam_type:
+        return None
+    exam = (
+        db.query(Exam)
+        .filter(Exam.exam_type == exam_type, Exam.is_active == True)
+        .order_by(Exam.exam_id.asc())
+        .first()
+    )
+    if exam is None:
+        exam = ExamTypeService.create_exam_in_db(db, exam_type, created_by=created_by)
+    return exam
+
+
+def _score_responses(questions: List[SubmittedQuestion], responses: List[SubmittedResponse]):
+    response_by_index = {item.question_index: item for item in responses}
+    correct_count = 0
+    incorrect_count = 0
+    unanswered_count = 0
+    for index, question in enumerate(questions):
+        response = response_by_index.get(index)
+        selected = response.selected_option if response else None
+        if selected is None:
+            unanswered_count += 1
+        elif selected == question.correctAnswer:
+            correct_count += 1
+        else:
+            incorrect_count += 1
+    return correct_count, incorrect_count, unanswered_count, response_by_index
+
+
+def _owned_attempt(db: Session, attempt_id: int, user_id: int) -> ExamAttempt:
+    attempt = db.query(ExamAttempt).filter(ExamAttempt.attempt_id == attempt_id).first()
+    if not attempt or attempt.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Exam attempt not found")
+    return attempt
+
+
+@app.post("/exams/attempts/start")
+def start_exam_attempt(request: StartAttemptRequest, db: Session = Depends(get_db)):
+    """Store a generated paper so the student can leave and resume it."""
+    try:
+        user = _user_by_username(db, request.username)
+        exam = _active_exam(db, request.exam_type, user.user_id)
+        attempt = ExamAttempt(
+            user_id=user.user_id,
+            exam_id=exam.exam_id if exam else None,
+            start_time=datetime.utcnow(),
+            total_questions=len(request.questions),
+            correct_answers=0,
+            incorrect_answers=0,
+            unanswered=len(request.questions),
+            status="in_progress",
+        )
+        db.add(attempt)
+        db.flush()
+
+        for question in request.questions:
+            stored_question = Question(
+                exam_id=exam.exam_id if exam else None,
+                subject=question.subject or request.subject,
+                topic=request.exam_type,
+                question_text=question.text,
+                question_type="MCQ",
+                difficulty_level=request.difficulty,
+                options=question.options,
+                correct_answer=str(question.correctAnswer),
+                marks=1,
+                negative_marks=0.0,
+                explanation=question.explanation,
+                created_at=datetime.utcnow(),
+            )
+            db.add(stored_question)
+            db.flush()
+            db.add(Answer(
+                attempt_id=attempt.attempt_id,
+                question_id=stored_question.question_id,
+                user_answer=None,
+                is_correct=False,
+                marked_for_review=False,
+            ))
+
+        db.commit()
+        return {"attempt_id": attempt.attempt_id, "status": attempt.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/exams/attempts/{attempt_id}")
+def get_exam_attempt(attempt_id: int, username: str, db: Session = Depends(get_db)):
+    """Return a saved paper and the answers recorded so far."""
+    user = _user_by_username(db, username)
+    attempt = _owned_attempt(db, attempt_id, user.user_id)
+    rows = (
+        db.query(Answer, Question)
+        .join(Question, Answer.question_id == Question.question_id)
+        .filter(Answer.attempt_id == attempt.attempt_id)
+        .order_by(Answer.answer_id.asc())
+        .all()
+    )
+    questions = []
+    responses = []
+    for index, (answer, question) in enumerate(rows):
+        questions.append({
+            "text": question.question_text,
+            "options": question.options or [],
+            "correctAnswer": int(question.correct_answer) if question.correct_answer and question.correct_answer.isdigit() else 0,
+            "explanation": question.explanation,
+            "subject": question.subject,
+            "difficulty": question.difficulty_level,
+        })
+        responses.append({
+            "question_index": index,
+            "selected_option": int(answer.user_answer) if answer.user_answer is not None and str(answer.user_answer).isdigit() else None,
+            "marked_for_review": bool(answer.marked_for_review),
+        })
+
+    exam = db.query(Exam).filter(Exam.exam_id == attempt.exam_id).first() if attempt.exam_id else None
+    return {
+        "attempt_id": attempt.attempt_id,
+        "status": attempt.status,
+        "exam_type": exam.exam_type if exam else None,
+        "difficulty": questions[0]["difficulty"] if questions else None,
+        "questions": questions,
+        "responses": responses,
+    }
+
+
+@app.put("/exams/attempts/{attempt_id}/progress")
+def save_exam_progress(attempt_id: int, request: SaveProgressRequest, db: Session = Depends(get_db)):
+    """Update answers on an in-progress attempt."""
+    try:
+        user = _user_by_username(db, request.username)
+        attempt = _owned_attempt(db, attempt_id, user.user_id)
+        if attempt.status != "in_progress":
+            raise HTTPException(status_code=400, detail="This exam is already submitted")
+
+        rows = (
+            db.query(Answer, Question)
+            .join(Question, Answer.question_id == Question.question_id)
+            .filter(Answer.attempt_id == attempt.attempt_id)
+            .order_by(Answer.answer_id.asc())
+            .all()
+        )
+        response_by_index = {item.question_index: item for item in request.responses}
+        for index, (answer, question) in enumerate(rows):
+            response = response_by_index.get(index)
+            if response is None:
+                continue
+            selected = response.selected_option
+            correct_index = int(question.correct_answer) if question.correct_answer and str(question.correct_answer).isdigit() else None
+            answer.user_answer = None if selected is None else str(selected)
+            answer.is_correct = selected == correct_index if selected is not None else False
+            answer.marked_for_review = response.marked_for_review
+
+        db.commit()
+        return {"message": "Progress saved", "attempt_id": attempt.attempt_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/submit-exam")
 def submit_exam(result: ExamResultSubmit, db: Session = Depends(get_db)):
     """Submit exam results"""
     print(f"📥 Received exam submission for: {result.username}")
     try:
-        # Find user
-        user = db.query(User).filter(User.email == result.username).first()
-        if not user:
-            print(f"❌ User not found: {result.username}")
-            raise HTTPException(status_code=404, detail=f"User {result.username} not found")
-        
+        user = _user_by_username(db, result.username)
         print(f"👤 Found user: {user.user_id}, saving attempt...")
-        
-        # For now, create a basic exam attempt record
-        # TODO: Link to actual exam_id when exam management is implemented
+
+        if result.attempt_id:
+            exam_attempt = _owned_attempt(db, result.attempt_id, user.user_id)
+            rows = (
+                db.query(Answer, Question)
+                .join(Question, Answer.question_id == Question.question_id)
+                .filter(Answer.attempt_id == exam_attempt.attempt_id)
+                .order_by(Answer.answer_id.asc())
+                .all()
+            )
+            stored_questions = [
+                SubmittedQuestion(
+                    text=question.question_text,
+                    options=question.options or [],
+                    correctAnswer=int(question.correct_answer) if question.correct_answer and str(question.correct_answer).isdigit() else 0,
+                    explanation=question.explanation,
+                    subject=question.subject,
+                )
+                for _, question in rows
+            ]
+            correct_count, incorrect_count, unanswered_count, response_by_index = _score_responses(
+                stored_questions,
+                result.responses or [],
+            )
+            for index, (answer, question) in enumerate(rows):
+                response = response_by_index.get(index)
+                selected = response.selected_option if response else None
+                correct_index = int(question.correct_answer) if question.correct_answer and str(question.correct_answer).isdigit() else None
+                answer.user_answer = None if selected is None else str(selected)
+                answer.is_correct = selected == correct_index if selected is not None else False
+                answer.marked_for_review = response.marked_for_review if response else False
+
+            exam_attempt.end_time = datetime.utcnow()
+            exam_attempt.score = float(correct_count)
+            exam_attempt.total_questions = len(rows)
+            exam_attempt.correct_answers = correct_count
+            exam_attempt.incorrect_answers = incorrect_count
+            exam_attempt.unanswered = unanswered_count
+            exam_attempt.status = "completed"
+            db.commit()
+            return {
+                "message": "Exam result saved successfully",
+                "attempt_id": exam_attempt.attempt_id,
+                "correct_answers": correct_count,
+                "incorrect_answers": incorrect_count,
+                "unanswered": unanswered_count,
+            }
+
+        exam = _active_exam(db, result.exam_type, user.user_id)
+
+        correct_count = result.score
+        incorrect_count = max(result.total_questions - result.score, 0)
+        unanswered_count = 0
+        response_by_index = {
+            item.question_index: item for item in (result.responses or [])
+        }
+
+        if result.questions:
+            correct_count, incorrect_count, unanswered_count, response_by_index = _score_responses(
+                result.questions,
+                result.responses or [],
+            )
+
         exam_attempt = ExamAttempt(
             user_id=user.user_id,
-            exam_id=None,  # Will be set when exam management is implemented
+            exam_id=exam.exam_id if exam else None,
             start_time=datetime.utcnow(),
             end_time=datetime.utcnow(),
-            score=result.score,
-            total_questions=result.total_questions,
-            correct_answers=result.score,
-            incorrect_answers=result.total_questions - result.score,
-            unanswered=0,
-            status="completed"
+            score=float(correct_count),
+            total_questions=len(result.questions) if result.questions else result.total_questions,
+            correct_answers=correct_count,
+            incorrect_answers=incorrect_count,
+            unanswered=unanswered_count,
+            status="completed",
         )
-        
         db.add(exam_attempt)
+        db.flush()
+
+        if result.questions:
+            for index, question in enumerate(result.questions):
+                stored_question = Question(
+                    exam_id=exam.exam_id if exam else None,
+                    subject=question.subject or result.subject,
+                    topic=result.exam_type,
+                    question_text=question.text,
+                    question_type="MCQ",
+                    difficulty_level=result.difficulty,
+                    options=question.options,
+                    correct_answer=str(question.correctAnswer),
+                    marks=1,
+                    negative_marks=0.0,
+                    explanation=question.explanation,
+                    created_at=datetime.utcnow(),
+                )
+                db.add(stored_question)
+                db.flush()
+
+                response = response_by_index.get(index)
+                selected = response.selected_option if response else None
+                db.add(Answer(
+                    attempt_id=exam_attempt.attempt_id,
+                    question_id=stored_question.question_id,
+                    user_answer=None if selected is None else str(selected),
+                    is_correct=selected == question.correctAnswer if selected is not None else False,
+                    marked_for_review=response.marked_for_review if response else False,
+                ))
+
         db.commit()
         print(f"✅ Exam result saved successfully for {result.username}")
-        
-        return {"message": "Exam result saved successfully"}
+
+        return {
+            "message": "Exam result saved successfully",
+            "attempt_id": exam_attempt.attempt_id,
+            "correct_answers": correct_count,
+            "incorrect_answers": incorrect_count,
+            "unanswered": unanswered_count,
+        }
     except HTTPException:
         raise
     except Exception as e:

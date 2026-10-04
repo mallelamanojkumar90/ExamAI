@@ -201,12 +201,14 @@ class QuestionCacheService:
         
         try:
             metadata_key = f"metadata:{cache_key}"
-            self.redis_client.hset(metadata_key, mapping={
+            metadata = {
                 "question_count": question_count,
                 "created_at": datetime.utcnow().isoformat(),
                 "hit_count": 0,
-                "miss_count": 0
-            })
+                "miss_count": 0,
+            }
+            for field, value in metadata.items():
+                self.redis_client.hset(metadata_key, field, value)
             # Metadata expires with the questions
             self.redis_client.expire(metadata_key, self.cache_ttl)
         except Exception as e:
