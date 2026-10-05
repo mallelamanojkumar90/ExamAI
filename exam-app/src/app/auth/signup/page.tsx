@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Mail, Lock, User, ArrowRight, Sparkles } from "lucide-react";
+import { signIn } from "next-auth/react";
 import { apiUrl } from "@/lib/config";
 
 export default function SignupPage() {
@@ -16,6 +17,17 @@ export default function SignupPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("error");
+
+    if (authError === "AccountAlreadyExists") {
+      setError("An account already exists for that Google email. Please sign in instead.");
+    } else if (authError === "GoogleSignupFailed" || authError === "AccessDenied") {
+      setError("Google signup failed. Please try again.");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,9 +201,13 @@ export default function SignupPage() {
           {/* Google Sign Up */}
           <button
             type="button"
-            onClick={() => {
-              // Use NextAuth signIn with Google provider
-              window.location.href = '/api/auth/signin?callbackUrl=/dashboard';
+            onClick={async () => {
+              await fetch("/api/auth/google-intent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ intent: "signup" }),
+              });
+              signIn("google", { callbackUrl: "/dashboard" }, { prompt: "select_account" });
             }}
             className="w-full py-3 bg-slate-800 border border-slate-700 rounded-lg font-semibold hover:bg-slate-700 transition-colors flex items-center justify-center gap-3"
           >

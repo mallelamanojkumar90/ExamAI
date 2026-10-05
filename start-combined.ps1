@@ -6,9 +6,10 @@ Write-Host ""
 # Start backend in background job
 Write-Host "Starting Backend Server on port 8000..." -ForegroundColor Green
 $backendJob = Start-Job -ScriptBlock {
-    Set-Location "C:\Manojkumar\development\Exam\backend"
+    Set-Location "$using:PSScriptRoot\backend"
+    $env:PYTHONIOENCODING = "utf-8"
     & .\venv311\Scripts\Activate.ps1
-    python -m uvicorn main:app --reload --port 8000
+    python -m uvicorn main:app --port 8000
 }
 
 # Wait a bit for backend to start
@@ -17,7 +18,7 @@ Start-Sleep -Seconds 5
 # Start frontend in background job  
 Write-Host "Starting Frontend Server on port 3000..." -ForegroundColor Green
 $frontendJob = Start-Job -ScriptBlock {
-    Set-Location "C:\Manojkumar\development\Exam\exam-app"
+    Set-Location "$using:PSScriptRoot\exam-app"
     npm run dev
 }
 

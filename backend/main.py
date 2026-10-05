@@ -285,41 +285,21 @@ class GoogleSignIn(BaseModel):
 
 @app.post("/auth/google-signin")
 def google_signin(google_user: GoogleSignIn, db: Session = Depends(get_db)):
-    """Handle Google OAuth sign-in"""
+    """Handle Google OAuth sign-in for existing users"""
     print(f"🔵 Google sign-in attempt: {google_user.email}")
     
     try:
-        # Check if user exists
         db_user = db.query(User).filter(User.email == google_user.email).first()
-        
-        if db_user:
-            # Update Google ID if not set
-            if not db_user.google_id:
-                db_user.google_id = google_user.google_id
+        if not db_user:
+            raise HTTPException(status_code=404, detail="No account found. Please sign up first.")
+
+        if not db_user.google_id:
+            db_user.google_id = google_user.google_id
+
+        db_user.last_login = datetime.utcnow()
+        db.commit()
             
-            # Update last login
-            db_user.last_login = datetime.utcnow()
-            db.commit()
-            
-            print(f"✅ Existing user logged in via Google: {google_user.email}")
-        else:
-            # Create new user
-            db_user = User(
-                email=google_user.email,
-                password_hash="",  # No password for OAuth users
-                full_name=google_user.name,
-                google_id=google_user.google_id,
-                role="student",
-                created_at=datetime.utcnow(),
-                last_login=datetime.utcnow(),
-                is_active=True
-            )
-            
-            db.add(db_user)
-            db.commit()
-            db.refresh(db_user)
-            
-            print(f"✅ New user created via Google: {google_user.email}")
+        print(f"✅ Existing user logged in via Google: {google_user.email}")
         
         return {
             "message": "Google sign-in successful",
@@ -328,12 +308,59 @@ def google_signin(google_user: GoogleSignIn, db: Session = Depends(get_db)):
             "role": db_user.role,
             "user_id": db_user.user_id
         }
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         import traceback
         print(f"❌ Google sign-in error: {str(e)}")
         traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")
+
+@app.post("/auth/google-signup")
+def google_signup(google_user: GoogleSignIn, db: Session = Depends(get_db)):
+    """Handle Google OAuth signup for new users only"""
+    print(f"🔵 Google signup attempt: {google_user.email}")
+
+    try:
+        db_user = db.query(User).filter(User.email == google_user.email).first()
+        if db_user:
+            raise HTTPException(status_code=409, detail="Account already exists. Please sign in instead.")
+
+        db_user = User(
+            email=google_user.email,
+            password_hash="",
+            full_name=google_user.name,
+            google_id=google_user.google_id,
+            role="student",
+            created_at=datetime.utcnow(),
+            last_login=datetime.utcnow(),
+            is_active=True
+        )
+
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+
+        print(f"✅ New user created via Google: {google_user.email}")
+
+        return {
+            "message": "Google signup successful",
+            "username": db_user.email,
+            "full_name": db_user.full_name,
+            "role": db_user.role,
+            "user_id": db_user.user_id
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        import traceback
+        print(f"❌ Google signup error: {str(e)}")
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Google signup failed: {str(e)}")
 
 
 # ============================================================================

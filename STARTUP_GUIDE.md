@@ -1,179 +1,108 @@
-# ExamAI Platform - Startup Guide
+# Startup Guide
 
-This guide explains how to run both the frontend and backend of the ExamAI platform together.
+This guide explains how to run the ExamAI frontend and backend locally.
 
 ## Prerequisites
 
-### Backend Requirements
-- Python 3.8 or higher
-- pip (Python package manager)
+- Python 3.11
+- Node.js and npm
+- PostgreSQL or Supabase connection string
+- Optional Redis server for question caching
 
-### Frontend Requirements
-- Node.js 16 or higher
-- npm (Node package manager)
+## First-Time Setup
 
-## Installation
+Install root and frontend dependencies:
 
-### First Time Setup
+```bash
+npm install
 
-1. **Install Backend Dependencies (in virtual environment)**
-   ```bash
-   cd backend
-   # Activate virtual environment
-   .\venv311\Scripts\activate
-   # Install dependencies
-   pip install -r requirements.txt
-   cd ..
-   ```
+cd exam-app
+npm install
+cd ..
+```
 
-2. **Install Frontend Dependencies**
-   ```bash
-   cd exam-app
-   npm install
-   cd ..
-   ```
+Install backend dependencies:
 
-3. **Install Root Dependencies (for npm method)**
-   ```bash
-   npm install
-   ```
+```powershell
+cd backend
+python -m venv venv311
+.\venv311\Scripts\activate
+pip install -r requirements.txt
+cd ..
+```
 
-**Note:** The backend uses a Python virtual environment (`venv311`) to isolate dependencies.
+Create environment files:
 
-## Running the Application
+- Copy `backend/.env.example` to `backend/.env`.
+- Copy `exam-app/env.example` to `exam-app/.env.local`.
 
-You have **three options** to run both frontend and backend together:
+## Run Everything
 
-### Option 1: Using npm (Recommended for Development)
-
-This method runs both servers in a single terminal with colored output.
+From the repository root:
 
 ```bash
 npm run dev
 ```
 
-This will start:
-- **Backend**: http://localhost:8000
-- **Frontend**: http://localhost:3000
+This starts:
 
-To stop both servers, press `Ctrl+C` in the terminal.
+- Backend: `http://127.0.0.1:8000`
+- API docs: `http://127.0.0.1:8000/docs`
+- Frontend: `http://localhost:3000`
 
----
+## Run Servers Separately
 
-### Option 2: Using Windows Batch File
-
-Double-click `start.bat` or run from terminal:
-
-```bash
-start.bat
-```
-
-This will open **two separate terminal windows**:
-- One for the backend server
-- One for the frontend server
-
-To stop the servers, close each terminal window individually.
-
----
-
-### Option 3: Using PowerShell Script
-
-Right-click `start.ps1` and select "Run with PowerShell" or run from PowerShell terminal:
+Backend:
 
 ```powershell
-.\start.ps1
-```
-
-This will open **two separate PowerShell windows**:
-- One for the backend server
-- One for the frontend server
-
-To stop the servers, close each PowerShell window individually.
-
----
-
-## Individual Server Commands
-
-If you need to run servers separately:
-
-### Backend Only
-```bash
 cd backend
+$env:PYTHONIOENCODING = "utf-8"
 .\venv311\Scripts\activate
-python -m uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --port 8000
 ```
 
-### Frontend Only
+Frontend:
+
 ```bash
 cd exam-app
 npm run dev
 ```
 
+## Windows Launch Scripts
+
+You can also use:
+
+- `start.bat` to open backend and frontend in separate Command Prompt windows.
+- `start.ps1` to open backend and frontend in separate PowerShell windows.
+- `start-combined.ps1` to run both as background jobs in one PowerShell window.
+
+## Notes
+
+- The backend startup sets `PYTHONIOENCODING=utf-8` because backend logs include Unicode symbols.
+- The default backend command avoids `uvicorn --reload`; reload can hit Windows named-pipe permission issues in some environments.
+- Uploaded documents are written to `backend/uploads/` at runtime and are ignored by Git.
+
 ## Troubleshooting
 
-### Port Already in Use
+Port already in use:
 
-If you get a "port already in use" error:
-
-**For Backend (Port 8000):**
-```bash
-# Find the process using port 8000
+```powershell
 netstat -ano | findstr :8000
-
-# Kill the process (replace PID with the actual process ID)
 taskkill /PID <PID> /F
 ```
 
-**For Frontend (Port 3000):**
+Missing Python packages:
+
+```powershell
+cd backend
+.\venv311\Scripts\activate
+pip install -r requirements.txt
+```
+
+Frontend dependency issues:
+
 ```bash
-# Find the process using port 3000
-netstat -ano | findstr :3000
-
-# Kill the process (replace PID with the actual process ID)
-taskkill /PID <PID> /F
+cd exam-app
+npm install
+npm run dev
 ```
-
-### Backend Not Starting
-
-1. Ensure Python is installed: `python --version`
-2. Ensure all dependencies are installed: `pip install -r backend/requirements.txt`
-3. Check if `.env` file exists in the backend folder with required environment variables
-
-### Frontend Not Starting
-
-1. Ensure Node.js is installed: `node --version`
-2. Ensure dependencies are installed: `cd exam-app && npm install`
-3. Clear npm cache if needed: `npm cache clean --force`
-
-## Environment Variables
-
-Make sure you have a `.env` file in the `backend` folder with the following variables:
-
-```env
-# Database
-DATABASE_URL=your_database_url
-
-# API Keys
-PINECONE_API_KEY=your_pinecone_key
-OPENAI_API_KEY=your_openai_key
-
-# Other configurations
-PORT=8000
-```
-
-## Development Workflow
-
-1. **Start the application** using any of the three methods above
-2. **Make changes** to your code
-3. **Auto-reload**: Both servers support hot-reload
-   - Backend: Changes to Python files will auto-reload
-   - Frontend: Changes to React/Next.js files will auto-reload
-4. **View changes** in your browser at http://localhost:3000
-
-## Production Deployment
-
-For production deployment, refer to the deployment documentation specific to your hosting platform.
-
----
-
-**Happy Coding! 🚀**

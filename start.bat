@@ -6,7 +6,7 @@ echo.
 
 REM Start backend in a new window
 echo Starting Backend Server...
-start "ExamAI Backend" cmd /k "cd backend && call venv311\Scripts\activate.bat && python -m uvicorn main:app --reload --port 8000"
+start "ExamAI Backend" cmd /k "cd backend && call venv311\Scripts\activate.bat && set PYTHONIOENCODING=utf-8&& python -m uvicorn main:app --port 8000"
 
 REM Wait a moment for backend to initialize
 timeout /t 3 /nobreak > nul

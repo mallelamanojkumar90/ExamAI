@@ -5,7 +5,7 @@ Write-Host ""
 
 # Start backend in a new PowerShell window
 Write-Host "Starting Backend Server..." -ForegroundColor Green
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; .\venv311\Scripts\Activate.ps1; python -m uvicorn main:app --reload --port 8000"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; `$env:PYTHONIOENCODING='utf-8'; .\venv311\Scripts\Activate.ps1; python -m uvicorn main:app --port 8000"
 
 # Wait a moment for backend to initialize
 Start-Sleep -Seconds 3

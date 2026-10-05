@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -16,6 +16,17 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("error");
+
+    if (authError === "GoogleAccountNotFound") {
+      setError("No account exists for that Google email. Please sign up first.");
+    } else if (authError === "GoogleSigninFailed" || authError === "AccessDenied") {
+      setError("Google sign in failed. Please try again.");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,9 +167,13 @@ export default function LoginPage() {
           {/* Google Sign In */}
           <button
             type="button"
-            onClick={() => {
-              // Use NextAuth signIn with Google provider
-              signIn('google', { callbackUrl: '/dashboard' });
+            onClick={async () => {
+              await fetch("/api/auth/google-intent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ intent: "login" }),
+              });
+              signIn("google", { callbackUrl: "/dashboard" }, { prompt: "select_account" });
             }}
             className="w-full py-3 bg-slate-800 border border-slate-700 rounded-lg font-semibold hover:bg-slate-700 transition-colors flex items-center justify-center gap-3"
           >

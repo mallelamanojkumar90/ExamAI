@@ -111,10 +111,18 @@ Set `FRONTEND_URL` on Render to your final Vercel URL after the first deploy.
 
 ### Google OAuth
 In [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
-- Add authorized redirect URI:
+- Add authorized redirect URIs for every origin you use:
   ```
+  http://localhost:3000/api/auth/callback/google
   https://your-app.vercel.app/api/auth/callback/google
   ```
+- Set `NEXTAUTH_URL` to the same origin where the frontend is running:
+  ```
+  NEXTAUTH_URL=http://localhost:3000
+  # or
+  NEXTAUTH_URL=https://your-app.vercel.app
+  ```
+- Do not include a trailing slash in `NEXTAUTH_URL`. If Google shows `Error 400: redirect_uri_mismatch`, compare the `redirect_uri` in Google's error details with the authorized redirect URIs above.
 
 ### Razorpay
 - Update webhook URL to point to your Render backend if using payments.

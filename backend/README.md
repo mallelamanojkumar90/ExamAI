@@ -1,26 +1,28 @@
-# ExamAI RAG Backend
+# ExamAI Backend
 
-This is the Python backend for the ExamAI platform. It handles question generation using RAG (Retrieval-Augmented Generation) and document ingestion.
+FastAPI backend for ExamAI. It owns authentication, users, exam attempts, question generation, RAG ingestion, subscriptions, payments, and performance analytics.
 
 ## Setup
 
-1.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+python -m venv venv311
+.\venv311\Scripts\activate
+pip install -r requirements.txt
+```
 
-2.  **Configure Environment**:
-    *   Open `rag_service.py`.
-    *   Add your Pinecone API Key, OpenAI/Gemini API Key, and Index Name.
-    *   Implement the `generate_questions` and `ingest_document` methods with your existing RAG logic.
+Copy `.env.example` to `.env` and fill in database, AI provider, Pinecone, Redis, Razorpay, and frontend values.
 
-3.  **Run the Server**:
-    ```bash
-    python main.py
-    ```
-    The server will start at `http://localhost:8000`.
+## Run
 
-## API Endpoints
+```powershell
+$env:PYTHONIOENCODING = "utf-8"
+.\venv311\Scripts\python.exe -m uvicorn main:app --port 8000
+```
 
-*   `POST /generate-questions`: Generates questions based on subject and difficulty.
-*   `POST /upload-document`: Uploads a PDF for indexing.
+API docs are available at `http://127.0.0.1:8000/docs`.
+
+## Notes
+
+- `uploads/` is runtime storage for uploaded documents and is intentionally ignored by Git.
+- Local SQLite databases, bytecode, and cache folders are ignored.
+- Google OAuth is mediated by the frontend NextAuth route, then forwarded to `/auth/google-signin` or `/auth/google-signup`.

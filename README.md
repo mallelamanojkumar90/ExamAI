@@ -1,240 +1,145 @@
-# ExamAI Platform
+# ExamAI
 
-An intelligent exam preparation platform powered by RAG (Retrieval-Augmented Generation) technology, supporting IIT-JEE, NEET, and EAMCET exam preparation.
+ExamAI is a full-stack exam preparation platform for IIT/JEE, NEET, and EAMCET practice. The app combines a Next.js frontend, a FastAPI backend, PostgreSQL persistence, Redis-backed question caching, Pinecone retrieval, and AI-generated practice questions.
 
-**This is a monorepo** containing both the frontend (Next.js) and backend (FastAPI) in a single Git repository for easier development and deployment.
+This repository is a monorepo:
 
-## 🚀 Quick Start
+```text
+Exam/
+├── backend/      FastAPI API, SQLAlchemy models, RAG, payments, analytics
+├── exam-app/     Next.js App Router frontend and NextAuth routes
+├── package.json  Root scripts for running both apps
+└── render.yaml   Render backend deployment blueprint
+```
 
-### Run Both Frontend and Backend Together
+## Features
 
-**Easiest Method - Using npm:**
+- Email/password authentication.
+- Google OAuth login and signup.
+- Google signup rejects an email that already has an account.
+- Exam dashboards for IIT/JEE, NEET, and EAMCET.
+- AI question generation with RAG fallback behavior.
+- Redis question caching and cache warming.
+- Document upload and ingestion for study material.
+- Exam attempts, answer tracking, and performance analytics.
+- Razorpay subscription and payment flows.
+
+## Prerequisites
+
+- Node.js and npm.
+- Python 3.11.
+- PostgreSQL or Supabase.
+- Redis, optional but recommended for caching.
+- Pinecone and OpenAI API credentials for RAG/question generation.
+- Google OAuth credentials for Google sign-in.
+
+## Environment
+
+Backend environment values belong in `backend/.env`. Start from `backend/.env.example`.
+
+Frontend environment values belong in `exam-app/.env.local`. Start from `exam-app/env.example`.
+
+Important frontend values:
+
+```env
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+NEXTAUTH_SECRET=your-nextauth-secret
+NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+For local Google OAuth, add this redirect URI in Google Cloud Console:
+
+```text
+http://localhost:3000/api/auth/callback/google
+```
+
+For production, add the deployed frontend origin:
+
+```text
+https://your-frontend-domain/api/auth/callback/google
+```
+
+## Install
+
+```bash
+npm install
+
+cd exam-app
+npm install
+
+cd ../backend
+python -m venv venv311
+.\venv311\Scripts\activate
+pip install -r requirements.txt
+```
+
+## Run Locally
+
+From the repository root:
+
 ```bash
 npm run dev
 ```
 
-**Alternative Methods:**
-- **Windows Batch**: Double-click `start.bat`
-- **PowerShell**: Run `.\start.ps1`
+This starts:
 
-For detailed setup instructions, see [STARTUP_GUIDE.md](./STARTUP_GUIDE.md)
+- Frontend: `http://localhost:3000`
+- Backend: `http://127.0.0.1:8000`
+- API docs: `http://127.0.0.1:8000/docs`
 
-## 📋 Features
+On Windows, the backend script sets `PYTHONIOENCODING=utf-8` so Unicode log output does not crash the console. The default backend command intentionally avoids `uvicorn --reload`; use reload manually only if your local shell supports it cleanly.
 
-- **AI-Powered Question Generation**: Generate exam questions using advanced AI models
-- **Multiple Exam Types**: Support for IIT-JEE, NEET, and EAMCET
-- **Document Upload**: Upload study materials for RAG-based question generation
-- **Performance Analytics**: Accuracy, subject and difficulty breakdown, trends, peer comparison, and recommendations
-- **Exam Taking**: Timer, question palette, mark for review, and save-and-resume
-- **Subscription Management**: Monthly, quarterly, and annual plans with Razorpay
-- **Multi-Model Support**: Choose from various AI models for question generation
-- **Question Caching**: Redis cache for repeated question sets
-- **Google OAuth**: Sign in with your Google account
+## Auth Behavior
 
-## 🛠️ Tech Stack
+Google login and Google signup intentionally do different things:
 
-### Frontend
-- **Next.js 16** - React framework
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first CSS framework
-- **Framer Motion** - Animation library
-- **Recharts** - Data visualization
-- **NextAuth** - Authentication
+- `Sign in with Google` calls `/auth/google-signin` and requires an existing account.
+- `Sign up with Google` calls `/auth/google-signup` and fails with an account-exists error when the email is already registered.
+- Both flows force Google's account chooser with `prompt=select_account`.
 
-### Backend
-- **FastAPI** - Modern Python web framework
-- **PostgreSQL** - Relational database
-- **SQLAlchemy** - ORM
-- **Pinecone** - Vector database for RAG
-- **OpenAI/Groq** - AI model providers
-- **Redis** - Caching layer
-- **bcrypt** - Password hashing
+## Runtime Files
 
-## 📁 Project Structure
+The repository does not track generated/runtime content:
 
-```
-Exam/
-├── backend/                 # FastAPI backend
-│   ├── main.py             # Main application entry
-│   ├── database.py         # Database models and setup
-│   ├── rag_service.py      # RAG implementation
-│   ├── model_service.py    # AI model management
-│   ├── requirements.txt    # Python dependencies
-│   └── .env               # Environment variables
-├── exam-app/               # Next.js frontend
-│   ├── src/
-│   │   ├── app/           # Next.js app directory
-│   │   └── components/    # React components
-│   ├── package.json       # Node dependencies
-│   └── next.config.js     # Next.js configuration
-├── package.json           # Root package.json for running both servers
-├── start.bat             # Windows batch startup script
-├── start.ps1             # PowerShell startup script
-└── STARTUP_GUIDE.md      # Detailed startup instructions
-```
+- `backend/uploads/` is created when documents are uploaded.
+- `*.db`, `__pycache__/`, `*.pyc`, `.next/`, `node_modules/`, and local env files are ignored.
+- Large uploaded PDFs and local databases should stay outside Git.
 
-## 🔧 Installation
+## Verification
 
-### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- PostgreSQL
-- Redis (optional, for caching)
+Frontend build:
 
-### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd Exam
-   ```
-
-2. **Install dependencies**
-   ```bash
-   # Install root dependencies
-   npm install
-
-   # Install backend dependencies
-   cd backend
-   pip install -r requirements.txt
-   cd ..
-
-   # Install frontend dependencies
-   cd exam-app
-   npm install
-   cd ..
-   ```
-
-3. **Configure environment variables**
-   
-   Create a `.env` file in the `backend` folder:
-   ```env
-   DATABASE_URL=postgresql://user:password@localhost:5432/examai
-   PINECONE_API_KEY=your_pinecone_api_key
-   OPENAI_API_KEY=your_openai_api_key
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   PORT=8000
-   ```
-
-   Local Postgres does not use SSL. A Supabase `DATABASE_URL` does. Redis is optional; if it is not running, questions are generated live and are not cached.
-
-4. **Run the application**
-   ```bash
-   npm run dev
-   ```
-
-   The application will be available at:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
-
-## 📖 Documentation
-
-- [Startup Guide](./STARTUP_GUIDE.md) - Detailed instructions for running the application
-- [Git Guide](./GIT_GUIDE.md) - Monorepo workflow and Git best practices
-- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
-- [PRD Compliance Check](./PRD_COMPLIANCE_CHECK.md) - Product requirements compliance
-- [Migration Guide](./README_MIGRATION.md) - Database migration information
-
-## 🔄 Git Workflow
-
-This is a **monorepo** - both frontend and backend are in one Git repository.
-
-```bash
-# Quick start
-git add .
-git commit -m "feat: Your feature description"
-git push origin master
-
-# Or use the helper script
-git-commit.bat
-```
-
-For detailed Git workflows, see [GIT_GUIDE.md](./GIT_GUIDE.md)
-
-## 🎯 Usage
-
-1. **Sign Up/Login**: Create an account or sign in with Google
-2. **Upload Study Materials**: Upload PDFs for RAG-based question generation
-3. **Generate Questions**: Select subject, difficulty, and exam type
-4. **Take Exams**: Practice with AI-generated questions
-5. **Track Progress**: View your performance analytics
-6. **Manage Subscription**: Upgrade for premium features
-
-## 🔑 API Endpoints
-
-### Authentication
-- `POST /auth/signup` - Register new user
-- `POST /auth/login` - Login user
-- `POST /auth/google-signin` - Google OAuth login
-
-### Question Generation
-- `POST /generate-questions` - Generate exam questions
-- `GET /models` - Get available AI models
-- `GET /exam-types` - Get supported exam types
-
-### Document Management
-- `POST /upload-document` - Upload study material
-- `GET /documents` - List uploaded documents
-
-### Exam attempts
-- `POST /exams/attempts/start` - Save a generated paper so it can be resumed
-- `GET /exams/attempts/{attempt_id}` - Load a saved paper
-- `PUT /exams/attempts/{attempt_id}/progress` - Save answers in progress
-- `POST /submit-exam` - Finish an attempt and store each question and answer
-
-### Performance
-- `GET /api/performance/dashboard/{user_id}` - Summary, timeline, peers, and recommendations
-
-### Subscription
-- `GET /api/subscription/plans` - Get subscription plans
-- `POST /api/payment/create-order` - Start a Razorpay checkout
-
-For complete API documentation, visit http://localhost:8000/docs after starting the backend.
-
-## 🧪 Testing
-
-### Backend Tests
-```bash
-cd backend
-pytest
-```
-
-### Frontend Tests
 ```bash
 cd exam-app
-npm test
+npm run build
 ```
 
-## 🚢 Deployment
+Backend syntax check:
 
-The hosted layout is Vercel for the frontend, Render for the backend, and Supabase for Postgres. See [DEPLOYMENT.md](./DEPLOYMENT.md).
+```bash
+cd backend
+.\venv311\Scripts\python.exe -m py_compile main.py
+```
 
-The schema migration is `backend/supabase/migrations/20260301120000_initial_exam_schema.sql`. `backend/migrate_to_supabase.py` copies rows from a local Postgres database when `SOURCE_DATABASE_URL` and `DATABASE_URL` are set. Do not commit exported SQL; those dumps can contain user records.
+Backend smoke checks after starting the server:
 
-## 🤝 Contributing
+```bash
+curl http://127.0.0.1:8000/docs
+curl http://localhost:3000/api/auth/providers
+```
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Deployment
 
-## 📝 License
+- Frontend: Vercel, from `exam-app`.
+- Backend: Render, from `backend`, using `render.yaml`.
+- Database: Supabase/PostgreSQL.
 
-This project is licensed under the MIT License.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment-specific environment variables and OAuth redirect setup.
 
-## 👥 Authors
+## Useful Docs
 
-- Your Name - Initial work
-
-## 🙏 Acknowledgments
-
-- OpenAI for GPT models
-- Pinecone for vector database
-- FastAPI and Next.js communities
-
----
-
-**Need Help?** Check out the [STARTUP_GUIDE.md](./STARTUP_GUIDE.md) for detailed setup instructions.
+- [DEPLOYMENT.md](./DEPLOYMENT.md)
+- [STARTUP_GUIDE.md](./STARTUP_GUIDE.md)
+- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)

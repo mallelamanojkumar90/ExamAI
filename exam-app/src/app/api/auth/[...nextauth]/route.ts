@@ -1,12 +1,22 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { cookies } from "next/headers";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 function apiUrl(path: string): string {
   const base = API_BASE_URL.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+async function getGoogleAuthIntent(): Promise<"login" | "signup"> {
+  try {
+    const cookieStore = await cookies();
+    return cookieStore.get("google_auth_intent")?.value === "signup" ? "signup" : "login";
+  } catch {
+    return "login";
+  }
 }
 
 export const authOptions = {
@@ -58,9 +68,11 @@ export const authOptions = {
     async signIn({ user, account, profile }: any) {
       // Handle Google OAuth sign in
       if (account?.provider === "google") {
+        const intent = await getGoogleAuthIntent();
+        const endpoint = intent === "signup" ? "/auth/google-signup" : "/auth/google-signin";
+
         try {
-          // Check if user exists or create new user via backend
-          const response = await fetch(apiUrl("/auth/google-signin"), {
+          const response = await fetch(apiUrl(endpoint), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -76,10 +88,14 @@ export const authOptions = {
             user.id = data.user_id.toString();
             return true;
           }
-          return false;
+          return intent === "signup"
+            ? "/auth/signup?error=AccountAlreadyExists"
+            : "/auth/login?error=GoogleAccountNotFound";
         } catch (error) {
           console.error("Google sign-in error:", error);
-          return false;
+          return intent === "signup"
+            ? "/auth/signup?error=GoogleSignupFailed"
+            : "/auth/login?error=GoogleSigninFailed";
         }
       }
       return true;
