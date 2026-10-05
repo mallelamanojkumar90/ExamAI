@@ -6,9 +6,11 @@ import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { 
     Calculator, Atom, FlaskConical, Dna, Layers, Play, Clock, 
-    CheckCircle, BookOpen, GraduationCap, Stethoscope, Microscope 
+    CheckCircle, BookOpen, GraduationCap, Stethoscope, Microscope,
+    CreditCard
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { apiUrl } from "@/lib/config";
 
 // Exam type configurations
 const examTypes = [
@@ -62,13 +64,15 @@ const difficulties = ["Easy", "Medium", "Hard"];
 
 export default function Dashboard() {
     const router = useRouter();
-    const { data: session } = useSession();
+    const { data: session, status } = useSession();
     const [selectedExamType, setSelectedExamType] = useState<string | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
     const [difficulty, setDifficulty] = useState("Medium");
     const [questionCount, setQuestionCount] = useState(10);
     const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
     const [username, setUsername] = useState<string>("Student");
+    const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+    const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
 
     // Load username from NextAuth session or localStorage
     useEffect(() => {
@@ -98,6 +102,51 @@ export default function Dashboard() {
         }
     }, [session]);
 
+    useEffect(() => {
+        if (status === "loading") {
+            return;
+        }
+
+        const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
+        if (sessionUserId) {
+            checkSubscription(Number(sessionUserId));
+            return;
+        }
+
+        const storedUser = localStorage.getItem("user");
+        if (!storedUser) {
+            router.push("/auth/login");
+            return;
+        }
+
+        try {
+            const parsedUser = JSON.parse(storedUser);
+            if (!parsedUser.user_id) {
+                router.push("/auth/login");
+                return;
+            }
+
+            checkSubscription(parsedUser.user_id);
+        } catch {
+            localStorage.removeItem("user");
+            router.push("/auth/login");
+        }
+    }, [router, session, status]);
+
+    const checkSubscription = async (userId: number) => {
+        try {
+            setSubscriptionLoading(true);
+            const response = await fetch(apiUrl(`/api/subscription/status/${userId}`));
+            const data = await response.json();
+            setHasActiveSubscription(Boolean(data.success && data.has_active_subscription));
+        } catch (error) {
+            console.error("Error checking subscription:", error);
+            setHasActiveSubscription(false);
+        } finally {
+            setSubscriptionLoading(false);
+        }
+    };
+
     // Update available subjects when exam type changes
     useEffect(() => {
         if (selectedExamType) {
@@ -113,6 +162,11 @@ export default function Dashboard() {
     }, [selectedExamType]);
 
     const startExam = () => {
+        if (!hasActiveSubscription) {
+            router.push("/subscription");
+            return;
+        }
+
         if (!selectedExamType) {
             alert("Please select an exam type");
             return;
@@ -123,6 +177,40 @@ export default function Dashboard() {
     };
 
     const selectedExamTypeData = examTypes.find(e => e.id === selectedExamType);
+
+    if (subscriptionLoading) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Navbar />
+                <main className="container py-12">
+                    <div className="text-slate-300">Checking subscription...</div>
+                </main>
+            </div>
+        );
+    }
+
+    if (!hasActiveSubscription) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Navbar />
+                <main className="container py-12">
+                    <div className="max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/50 p-8">
+                        <CreditCard className="mb-4 h-10 w-10 text-primary" />
+                        <h1 className="mb-3 text-3xl font-bold">Choose a plan to start practicing</h1>
+                        <p className="mb-6 text-slate-400">
+                            Exam access unlocks after an active subscription is attached to your account.
+                        </p>
+                        <button
+                            onClick={() => router.push("/subscription")}
+                            className="rounded-xl bg-gradient-to-r from-primary to-blue-600 px-6 py-3 font-semibold text-white transition hover:opacity-90"
+                        >
+                            View Plans
+                        </button>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-background">

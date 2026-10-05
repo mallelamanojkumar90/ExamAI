@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Check, Sparkles } from "lucide-react";
 import { apiUrl } from "@/lib/config";
 
@@ -18,6 +19,7 @@ interface Plan {
 
 export default function SubscriptionPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -41,11 +43,30 @@ export default function SubscriptionPage() {
   };
 
   const handleSelectPlan = (planId: string) => {
-    const user = localStorage.getItem("user");
-    if (!user) {
-      router.push("/");
+    const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
+    if (sessionUserId) {
+      router.push(`/checkout?plan=${planId}`);
       return;
     }
+
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) {
+      router.push(`/auth/signup?plan=${planId}`);
+      return;
+    }
+
+    try {
+      const user = JSON.parse(storedUser);
+      if (!user.user_id) {
+        router.push(`/auth/signup?plan=${planId}`);
+        return;
+      }
+    } catch {
+      localStorage.removeItem("user");
+      router.push(`/auth/signup?plan=${planId}`);
+      return;
+    }
+
     router.push(`/checkout?plan=${planId}`);
   };
 

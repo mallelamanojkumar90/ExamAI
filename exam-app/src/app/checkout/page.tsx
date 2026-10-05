@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Lock, CreditCard, CheckCircle } from "lucide-react";
 import { apiUrl } from "@/lib/config";
 
@@ -21,42 +22,91 @@ interface Plan {
   features: string[];
 }
 
+interface StoredUser {
+  username?: string;
+  full_name?: string;
+  user_id?: number;
+}
+
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
   const planType = searchParams.get("plan");
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
+  const [user, setUser] = useState<StoredUser | null>(null);
+  const [razorpayReady, setRazorpayReady] = useState(false);
 
   useEffect(() => {
-    // Load Razorpay script
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
-
-    // Get user info
-    const user = localStorage.getItem("user");
-    if (!user) {
-      router.push("/");
+    if (status === "loading") {
       return;
     }
 
-    // Fetch user ID (in real app, this would come from auth)
-    // For now, we'll use a placeholder
-    setUserId(1);
+    const sessionUser = session?.user as
+      | { id?: string; email?: string | null; name?: string | null }
+      | undefined;
+
+    if (sessionUser?.id) {
+      setUser({
+        user_id: Number(sessionUser.id),
+        username: sessionUser.email || undefined,
+        full_name: sessionUser.name || undefined,
+      });
+      setUserId(Number(sessionUser.id));
+    } else {
+      const storedUser = localStorage.getItem("user");
+      if (!storedUser) {
+        router.push("/auth/login");
+        return;
+      }
+
+      try {
+        const parsedUser: StoredUser = JSON.parse(storedUser);
+        if (!parsedUser.user_id) {
+          router.push("/auth/login");
+          return;
+        }
+
+        setUser(parsedUser);
+        setUserId(parsedUser.user_id);
+      } catch {
+        localStorage.removeItem("user");
+        router.push("/auth/login");
+        return;
+      }
+    }
+
+    if (window.Razorpay) {
+      setRazorpayReady(true);
+    } else {
+      const existingScript = document.querySelector<HTMLScriptElement>(
+        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+      );
+      const script = existingScript || document.createElement("script");
+
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => setRazorpayReady(true);
+      script.onerror = () => {
+        setRazorpayReady(false);
+        console.error("Unable to load Razorpay checkout script");
+      };
+
+      if (!existingScript) {
+        document.body.appendChild(script);
+      }
+    }
 
     if (planType) {
       fetchPlanDetails(planType);
+    } else {
+      setLoading(false);
     }
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, [planType]);
+  }, [planType, router, session, status]);
 
   const fetchPlanDetails = async (planId: string) => {
     try {
@@ -74,6 +124,10 @@ function CheckoutContent() {
 
   const handlePayment = async () => {
     if (!plan || !userId) return;
+    if (!razorpayReady || !window.Razorpay) {
+      alert("Payment gateway is still loading. Please try again in a moment.");
+      return;
+    }
 
     setProcessing(true);
 
@@ -134,8 +188,8 @@ function CheckoutContent() {
           }
         },
         prefill: {
-          name: localStorage.getItem("user") || "",
-          email: localStorage.getItem("user") || "",
+          name: user?.full_name || user?.username || "",
+          email: user?.username || "",
         },
         theme: {
           color: "#3B82F6",

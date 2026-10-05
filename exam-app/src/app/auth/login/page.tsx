@@ -16,10 +16,12 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [planParam, setPlanParam] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const authError = params.get("error");
+    setPlanParam(params.get("plan"));
 
     if (authError === "GoogleAccountNotFound") {
       setError("No account exists for that Google email. Please sign up first.");
@@ -27,6 +29,10 @@ export default function LoginPage() {
       setError("Google sign in failed. Please try again.");
     }
   }, []);
+
+  const getPostAuthPath = () => {
+    return planParam ? `/checkout?plan=${encodeURIComponent(planParam)}` : "/dashboard";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +67,7 @@ export default function LoginPage() {
         if (data.role === "admin") {
           router.push("/admin");
         } else {
-          router.push("/dashboard");
+          router.push(getPostAuthPath());
         }
       } else {
         setError(data?.detail || "Login failed. Please check your credentials.");
@@ -173,7 +179,7 @@ export default function LoginPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ intent: "login" }),
               });
-              signIn("google", { callbackUrl: "/dashboard" }, { prompt: "select_account" });
+              signIn("google", { callbackUrl: getPostAuthPath() }, { prompt: "select_account" });
             }}
             className="w-full py-3 bg-slate-800 border border-slate-700 rounded-lg font-semibold hover:bg-slate-700 transition-colors flex items-center justify-center gap-3"
           >
@@ -202,7 +208,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-slate-400">
               Don't have an account?{" "}
-              <Link href="/auth/signup" className="text-purple-400 hover:text-purple-300 font-semibold">
+              <Link href={planParam ? `/auth/signup?plan=${encodeURIComponent(planParam)}` : "/auth/signup"} className="text-purple-400 hover:text-purple-300 font-semibold">
                 Sign up
               </Link>
             </p>
