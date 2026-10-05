@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   TrendingUp,
   TrendingDown,
@@ -79,6 +80,7 @@ interface RecentActivity {
 
 export default function PerformanceDashboard() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<number | null>(null);
   const [summary, setSummary] = useState<PerformanceSummary | null>(null);
@@ -90,6 +92,15 @@ export default function PerformanceDashboard() {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
 
   useEffect(() => {
+    if (status === "loading") return;
+
+    const sessionUserId = Number((session?.user as any)?.id);
+    if (sessionUserId) {
+      setUserId(sessionUserId);
+      fetchDashboardData(sessionUserId);
+      return;
+    }
+
     const userStr = localStorage.getItem("user");
     if (!userStr) {
       router.push("/");
@@ -124,7 +135,7 @@ export default function PerformanceDashboard() {
       console.error("Error parsing user data:", error);
       router.push("/");
     }
-  }, []);
+  }, [router, session, status]);
 
   const fetchDashboardData = async (userId: number) => {
     try {

@@ -4,12 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, LogOut, User, BarChart3, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
+import { signOut, useSession } from "next-auth/react";
 
 export default function Navbar() {
     const router = useRouter();
+    const { data: session } = useSession();
     const [username, setUsername] = useState<string | null>(null);
 
     useEffect(() => {
+        if (session?.user?.name || session?.user?.email) {
+            setUsername(session.user.name || session.user.email || "Student");
+            return;
+        }
+
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
             try {
@@ -20,10 +27,14 @@ export default function Navbar() {
                 setUsername(storedUser);
             }
         }
-    }, []);
+    }, [session]);
 
     const handleLogout = () => {
         localStorage.removeItem("user");
+        if (session) {
+            signOut({ callbackUrl: "/" });
+            return;
+        }
         router.push("/");
     };
 
